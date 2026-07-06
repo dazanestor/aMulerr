@@ -75,6 +75,15 @@ Then, add a new Indexer in *RR:
 - URL: `http://amulerr:3000/`
 - Download Client: `aMulerr`
 
+## Environment Variables
+
+| Variable | Requirement | Description |
+| --- | --- | --- |
+| `AMULE_HOST` | Required | Hostname of the aMule container. |
+| `AMULE_PORT` | Optional | Port for External Connections (default: `4712`). |
+| `AMULE_PWD` | Required | Password for External Connections (`GUI_PWD` in aMule). |
+| `ALLOWED_CATEGORIES` | Optional | Comma-separated list of categories allowed to be created/modified in aMule |
+
 ## Removing stale downloads
 
 Since aMulerr simulates a qBittorrent api, it is fully compatible with:

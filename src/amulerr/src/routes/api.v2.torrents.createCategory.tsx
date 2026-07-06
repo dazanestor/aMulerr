@@ -1,5 +1,6 @@
 
 import { useAmule } from '#/amule'
+import { isCategoryAllowed } from '#/lib/category'
 import { createFileRoute } from '@tanstack/react-router'
 
 export const Route = createFileRoute('/api/v2/torrents/createCategory')({
@@ -8,6 +9,10 @@ export const Route = createFileRoute('/api/v2/torrents/createCategory')({
       POST: async ({ request }) => {
         const formData = await request.formData()
         const categoryTitle = formData.get("category")?.toString()
+
+        if (categoryTitle && !isCategoryAllowed(categoryTitle)) {
+          return Response.json({})
+        }
 
         if (categoryTitle) {
           await useAmule(async (amule) => {

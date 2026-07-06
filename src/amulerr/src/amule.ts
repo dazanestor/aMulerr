@@ -3,19 +3,6 @@ import { Mutex } from "async-mutex"
 import { sanitizeFilename, sanitizeQuery, setReleaseGroup } from './lib/naming';
 import { groupBy, skipFalsy, toEntries } from './lib/array';
 
-declare global {
-    namespace NodeJS {
-        interface ProcessEnv {
-            PUID: string;
-            PGID: string;
-            AMULE_HOST: string;
-            AMULE_PORT: string;
-            AMULE_PWD: string;
-        }
-    }
-}
-
-
 export async function useAmule<T>(fn: (client: AmuleClient) => T) {
     const amuleClient = new AmuleClient(process.env.AMULE_HOST, parseInt(process.env.AMULE_PORT), process.env.AMULE_PWD);
     try {
