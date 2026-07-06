@@ -79,6 +79,7 @@ Then, add a new Indexer in *RR:
 
 Since aMulerr simulates a qBittorrent api, it is fully compatible with:
 - [Decluttarrr](https://github.com/ManiMatter/decluttarr)
+- [aMulerrStalledChecker](https://github.com/Jorman/aMulerrStalledChecker)
 
 ## Troubleshooting
 
