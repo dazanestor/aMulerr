@@ -17,7 +17,7 @@ export const Route = createFileRoute('/api/v2/torrents/delete')({
           .filter(skipFalsy)
 
         const deleteFilesQsp = formData.get('deleteFiles')?.toString()
-        const deleteFiles = !deleteFilesQsp || deleteFilesQsp.toLowerCase() === 'true'
+        const deleteFiles = deleteFilesQsp?.toLowerCase() === 'true'
 
         if (hashes?.length) {
           await useAmule(async (amule) => {
