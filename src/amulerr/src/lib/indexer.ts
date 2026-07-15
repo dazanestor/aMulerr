@@ -20,20 +20,32 @@ export const emptyResponse = (offset: string) => `
 
 export const itemsResponse = (
   searchResults: Awaited<ReturnType<typeof searchAll>>,
-  categories: number[]
+  categories: number[],
 ) => `
   <rss version="2.0" xmlns:torznab="http://torznab.com/schemas/2015/feed">
     <channel>
       <torznab:response offset="0" total="${searchResults.length}"/>
-      ${searchResults.map(
-  (item) => `
+      ${searchResults
+        .map((item) => {
+          const magnetLink = toMagnetLink(
+            item.fileHash,
+            item.fileName,
+            item.fileSize,
+          )
+
+          if (!magnetLink) {
+            return null
+          }
+
+          return `
           <item>
             <title>${encode(item.fileName)}</title>
             <guid>${item.fileHash}-${encode(item.fileName)}</guid>
             <pubDate>${buildRFC822Date(new Date())}</pubDate>
-            <enclosure url="${encode(toMagnetLink(item.fileHash, item.fileName, item.fileSize))}" length="${item.fileSize}" type="application/x-bittorrent" />
+            <enclosure url="${encode(magnetLink)}" length="${item.fileSize}" type="application/x-bittorrent" />
             <torznab:attr name="size" value="${item.fileSize}" />
-            ${categories.map((c) => `<torznab:attr name="category" value="${c}" />`).join("")}
+            <torznab:attr name="magneturl" value="${encode(magnetLink)}" />
+            ${categories.map((c) => `<torznab:attr name="category" value="${c}" />`).join('')}
             <torznab:attr name="seeders" value="${item.sourceCount}" />
             <torznab:attr name="downloadvolumefactor" value="0" />
             <torznab:attr name="uploadvolumefactor" value="0" />
@@ -41,7 +53,9 @@ export const itemsResponse = (
             <torznab:attr name="minimumseedtime" value="0" />
             <torznab:attr name="tag" value="freeleech" />
           </item>`
-)}
+        })
+        .filter(skipFalsy)
+        .join('')}
     </channel>
   </rss>
   `
