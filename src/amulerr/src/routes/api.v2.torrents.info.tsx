@@ -13,8 +13,14 @@ export const Route = createFileRoute('/api/v2/torrents/info')({
 
         const { categories, shared, downloads } = await useAmule(async (amule) => {
           const categories = await amule.getCategories()
-          const downloads = await amule.getDownloadQueue()
-          const shared = await amule.getSharedFiles()
+          // Fetch downloads and shared files concurrently: a completed download
+          // transitioning between the two lists (aMule moves it out of the
+          // download queue and into shared files) could otherwise fall into
+          // the gap between two sequential round-trips.
+          const [downloads, shared] = await Promise.all([
+            amule.getDownloadQueue(),
+            amule.getSharedFiles(),
+          ])
 
           return {
             categories,
