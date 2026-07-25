@@ -1360,8 +1360,11 @@ class AmuleClient {
     return prefsTag.children
       .filter(t => t.tagId === EC_TAGS.EC_TAG_CATEGORY)
       .map((catTag, index) => {
-        // Category ID from tag value - handle both Buffer and number types
-        let id = catTag.humanValue || catTag.value || index;
+        // Category ID from tag value - handle both Buffer and number types.
+        // Use ?? rather than || : category 0 ("no category"/default) is a valid,
+        // falsy ID and must not be treated as "missing" and overwritten by the
+        // Buffer or array-index fallback.
+        let id = catTag.humanValue ?? catTag.value ?? index;
         if (Buffer.isBuffer(id)) {
           id = id.readUInt8(0);  // Convert Buffer to number
         }
@@ -1383,7 +1386,9 @@ class AmuleClient {
    */
   parseCategoryIdFromResponse(response) {
     const categoryTag = response.tags?.find(t => t.tagId === EC_TAGS.EC_TAG_CATEGORY);
-    return categoryTag?.humanValue || categoryTag?.value || null;
+    // ?? rather than ||, same reasoning as parseCategories: a returned ID of 0 is
+    // valid and must not be treated as absent.
+    return categoryTag?.humanValue ?? categoryTag?.value ?? null;
   }
 
   /**

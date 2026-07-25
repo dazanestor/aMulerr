@@ -41,6 +41,7 @@ export const itemsResponse = (
           <item>
             <title>${encode(item.fileName)}</title>
             <guid>${item.fileHash}-${encode(item.fileName)}</guid>
+            <link>${encode(magnetLink)}</link>
             <pubDate>${buildRFC822Date(new Date())}</pubDate>
             <enclosure url="${encode(magnetLink)}" length="${item.fileSize}" type="application/x-bittorrent" />
             <torznab:attr name="size" value="${item.fileSize}" />
