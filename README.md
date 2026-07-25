@@ -9,23 +9,46 @@ Integrate your *rr apps with aMule (eD2k/KAD). Compatible with:
 
 > aMulerr is the successor of eMulerr, which no longer exists. If you want a full UI for amule, try [AmuTorrent](https://github.com/got3nks/amutorrent)
 
+## This fork
+
+This is [dazanestor/aMulerr](https://github.com/dazanestor/aMulerr), branch `combined-auth-categories` —
+a combination of two upstream PRs that hadn't been merged yet, plus a few additional fixes:
+
+- **qBittorrent auth/version endpoints** (upstream PR [#60](https://github.com/isc30/aMulerr/pull/60)) — without these, Radarr/Sonarr's connection test for the download client fails outright (`POST /api/v2/auth/login` 404s).
+- **`ALLOWED_CATEGORIES` category filtering** (upstream PR [#51](https://github.com/isc30/aMulerr/pull/51)) — prevents category cross-contamination when aMulerr is used alongside a real qBittorrent client of the same type.
+- Concurrent `sendPacket()` calls on the same EC connection could resolve with the *wrong* response (the EC wire protocol has no request/response correlation ID) — now serialized with a mutex.
+- `deleted_hashes.json` is now stored under `DATA_DIR` (default `/config`, meant to be a mounted volume) instead of the OS tmpdir, so deleted-torrent tracking survives container restarts.
+- Torznab `total` count now matches the actual `<item>` count rendered (previously could overcount if an item's hash failed validation).
+- `/api/v2/torrents/files` now reports `progress` as a 0-1 fraction, matching the real qBittorrent API.
+
+Published image: **`ghcr.io/dazanestor/amulerr:combined`** (public, auto-built by [this repo's GitHub Action](.github/workflows/docker-build.yml) on every push to `combined-auth-categories`).
+
+### ⚠️ Don't put aMulerr behind a VPN container's network namespace
+
+If aMulerr shares another container's network stack (`network_mode: service:X` / `container:X` — e.g. to route it through a VPN container like gluetun), its TanStack Start server can intermittently fail to register its API routes on startup (every route 404s, including `/api/v2/auth/login`, even though the process is running and healthy). This isn't consistently reproducible and we couldn't pin down the exact trigger, but it goes away entirely when aMulerr runs on a normal bridge network. **aMule itself can still sit behind a VPN** — only point `AMULE_HOST`/`AMULE_PORT` at it over the docker network; aMulerr itself doesn't need VPN protection since it does no P2P networking on its own.
+
 ## Example `docker-compose.yaml`
 
-> Note: aMulerr connects to aMule, you should run it in a separate container
+> Note: aMulerr connects to aMule, you should run it in a separate container. `amule` may be placed behind a VPN container; `amulerr` should not be (see warning above).
 
 ```yaml
 services:
   amulerr:
     container_name: amulerr
-    image: isc30/amulerr:latest
+    image: ghcr.io/dazanestor/amulerr:combined
     user: "1000:1000" # optional
     environment:
       - AMULE_HOST=amule
       - AMULE_PORT=4712
       - AMULE_PWD=api-secret # API Password
       - ALLOWED_CATEGORIES=tv-sonarr-aMulerr,radarr-aMulerr # Optional: Filter categories to prevent contamination
+      - DATA_DIR=/config # Optional: persist deleted-hash tracking across restarts
+      - NODE_OPTIONS=--import /keepalive.mjs # Workaround, see "Troubleshooting" below
     ports:
       - "3000:3000" # API
+    volumes:
+      - amulerr_config:/config
+      - ./keepalive.mjs:/keepalive.mjs:ro
   amule:
     container_name: amule
     image: ngosang/amule:latest
@@ -48,6 +71,13 @@ services:
 volumes:
   downloads:
   amule_data:
+  amulerr_config:
+```
+
+`keepalive.mjs` (see "Troubleshooting" below for why it's needed):
+
+```js
+setInterval(() => {}, 2147483647);
 ```
 
 ## Environment Variables
@@ -58,6 +88,7 @@ volumes:
 | `AMULE_PORT` | Port for External Connections (default: `4712`). |
 | `AMULE_PWD` | Password for External Connections (GUI_PWD in aMule). |
 | `ALLOWED_CATEGORIES` | Comma-separated list of categories allowed to be created/modified in aMule (e.g. `tv-sonarr,radarr,tv-4k`). If set, any category not matching this list will be ignored. |
+| `DATA_DIR` | *(this fork)* Directory for persisted state (currently just `deleted_hashes.json`). Default `/config`. Mount a volume here, or deletions won't be remembered across restarts. |
 
 ## Configuring *rr
 
@@ -92,6 +123,16 @@ Since aMulerr simulates a qBittorrent api, it is fully compatible with:
 - [aMulerrStalledChecker](https://github.com/Jorman/aMulerrStalledChecker)
 
 ## Troubleshooting
+
+### Container exits immediately with no log output at all
+
+We occasionally saw the container start, print nothing, and exit cleanly (code 0) within a second —
+Docker's `restart: unless-stopped` would just loop forever with no error to go on. This looks like a
+startup race in the underlying Nitro/srvx server (the process exits before the listener is fully up if
+nothing else is keeping the event loop alive). Mounting a trivial keep-alive script and preloading it
+via `NODE_OPTIONS=--import /keepalive.mjs` (see the compose example above) reliably avoids it — once the
+real server finishes starting, it keeps the process alive on its own; the import is a no-op after that.
+We couldn't identify the exact root cause upstream, so treat this as a workaround, not a fix.
 
 ### Container crashes when sharing too many files
 
