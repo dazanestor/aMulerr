@@ -35,6 +35,11 @@ export const Route = createFileRoute('/api/v2/torrents/createCategory')({
             // incoming dir directly (the same value aMule itself assigns as
             // a new category's default path) needs no create/delete at all.
             const incomingDir = await amule.getIncomingDir()
+            if (!incomingDir) {
+              throw new Error(
+                'Could not determine aMule incoming directory (EC_TAG_DIRECTORIES_INCOMING missing from response)',
+              )
+            }
 
             const categories = await amule.getCategories()
             const category = categories.find((c) => c.title === categoryTitle)

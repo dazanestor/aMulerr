@@ -211,6 +211,21 @@ describe('torrents/createCategory', () => {
     expect(amuleMock.deleteCategory).not.toHaveBeenCalled()
   })
 
+  it('fails loudly instead of building a "null/category" path when getIncomingDir is unavailable', async () => {
+    amuleMock.getIncomingDir.mockResolvedValue(null)
+
+    const { Route } = await import('#/routes/api.v2.torrents.createCategory')
+    await expect(
+      getHandler(
+        Route,
+        'POST',
+      )({ request: postForm({ category: 'radarr-amule' }) }),
+    ).rejects.toThrow(/incoming directory/i)
+
+    expect(amuleMock.createCategory).not.toHaveBeenCalled()
+    expect(amuleMock.updateCategory).not.toHaveBeenCalled()
+  })
+
   it('updates an existing category instead of creating a duplicate', async () => {
     amuleMock.getIncomingDir.mockResolvedValue('/downloads/incoming')
     amuleMock.getCategories.mockResolvedValue([
