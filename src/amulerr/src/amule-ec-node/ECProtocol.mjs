@@ -3,6 +3,7 @@
 import { inspect } from 'util';
 import { Socket } from "net";
 import { createHash } from "crypto";
+import { Mutex } from "async-mutex";
 import { EC_OPCODES, EC_TAGS, EC_TAG_TYPES, PROTOCOL_VERSION } from "./ECDefs.mjs";
 
 const DEBUG = false;
@@ -21,6 +22,11 @@ class ECProtocol {
     this.requestTimeout = options.requestTimeout !== undefined ? options.requestTimeout : 30000;
     // Consecutive timeout counter — after 2 in a row, destroy socket to trigger reconnect
     this.consecutiveTimeouts = 0;
+    // EC has no request/response correlation (no request ID in the wire format), so
+    // only one request can be in flight on a connection at a time. Concurrent callers
+    // (e.g. Promise.all on the same client) would otherwise race on the shared "data"
+    // listener and could resolve with a DIFFERENT request's response. Serialize here.
+    this.sendMutex = new Mutex();
   }
 
   async connect() {
@@ -256,6 +262,10 @@ class ECProtocol {
    * within this.requestTimeout ms (0 = no timeout).
    */
   async sendPacket(opcode, tags = []) {
+    return this.sendMutex.runExclusive(() => this._sendPacketExclusive(opcode, tags));
+  }
+
+  async _sendPacketExclusive(opcode, tags = []) {
     return new Promise((resolve, reject) => {
       let buffer = Buffer.alloc(0);
       let timer = null;
