@@ -2,7 +2,6 @@ import { useAmule } from '#/amule'
 import { skipFalsy } from '#/lib/array'
 import { addDeletedHash } from '#/lib/deleted'
 import { createFileRoute } from '@tanstack/react-router'
-import fsSync from 'node:fs'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 
@@ -37,23 +36,11 @@ export const Route = createFileRoute('/api/v2/torrents/delete')({
               addDeletedHash(hash)
             }
 
-            // If the files exist on disk, delete them physically (same matches computed above)
-            for (const f of matches) {
-              const fullPath =
-                f.path && f.fileName ? `${f.path}/${f.fileName}` : ''
-              if (fullPath && fsSync.existsSync(fullPath)) {
-                try {
-                  console.log(`Physically deleting file: ${fullPath}`)
-                  fsSync.rmSync(fullPath, { force: true })
-                } catch (err: any) {
-                  console.error(
-                    `Failed to delete physical file ${fullPath}:`,
-                    err.message,
-                  )
-                }
-              }
-            }
-
+            // Only physically delete files when the caller asked for it —
+            // this used to run unconditionally before the deleteFiles check
+            // below, so `deleteFiles=false` (remove from queue, keep the
+            // downloaded data) was silently ignored and the file was deleted
+            // anyway.
             if (deleteFiles) {
               const files = matches
                 .filter((f) => f.path && f.fileName)
