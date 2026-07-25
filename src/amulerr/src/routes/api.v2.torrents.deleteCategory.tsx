@@ -1,4 +1,3 @@
-
 import { useAmule } from '#/amule'
 import { createFileRoute } from '@tanstack/react-router'
 
@@ -7,14 +6,14 @@ export const Route = createFileRoute('/api/v2/torrents/deleteCategory')({
     handlers: {
       POST: async ({ request }: { request: Request }) => {
         const formData = await request.formData()
-        const categoryTitle = formData.get("category")?.toString()
+        const categoryTitle = formData.get('category')?.toString()
 
         if (categoryTitle) {
           await useAmule(async (amule) => {
             const categories = await amule.getCategories()
-            const category = categories.find(c => c.title === categoryTitle)
+            const category = categories.find((c) => c.title === categoryTitle)
             if (category) {
-              if (!await amule.deleteCategory(category.id)) {
+              if (!(await amule.deleteCategory(category.id))) {
                 throw new Error(`Failed to delete category ${categoryTitle}`)
               }
             }
@@ -22,7 +21,7 @@ export const Route = createFileRoute('/api/v2/torrents/deleteCategory')({
         }
 
         return Response.json({})
-      }
-    }
+      },
+    },
   },
 })

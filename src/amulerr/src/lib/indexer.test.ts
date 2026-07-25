@@ -39,6 +39,10 @@ describe('itemsResponse', () => {
     expect(xml).toContain('<enclosure url=')
     expect(xml).toContain('torznab:attr name="magneturl"')
     expect(expectedMagnet).not.toBeNull()
-    expect(xml).toContain(expectedMagnet!.split('urn:btih:')[1]!.split('&')[0])
+    const expectedBtih = expectedMagnet!.split('urn:btih:')[1].split('&')[0]
+    expect(xml).toContain(expectedBtih)
+    expect(xml).toContain(
+      `torznab:attr name="infohash" value="${expectedBtih}"`,
+    )
   })
 })

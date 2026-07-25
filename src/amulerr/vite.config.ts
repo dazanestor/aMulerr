@@ -19,7 +19,7 @@ const config = defineConfig({
   server: {
     host: true,
     allowedHosts: true,
-  }
+  },
 })
 
 export default config

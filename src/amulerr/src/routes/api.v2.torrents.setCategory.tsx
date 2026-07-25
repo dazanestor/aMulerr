@@ -1,4 +1,3 @@
-
 import { useAmule } from '#/amule'
 import { isCategoryAllowed } from '#/lib/categories'
 import { skipFalsy } from '#/lib/array'
@@ -10,28 +9,32 @@ export const Route = createFileRoute('/api/v2/torrents/setCategory')({
       POST: async ({ request }: { request: Request }) => {
         const formData = await request.formData()
         const hashes = formData
-          .get("hashes")
+          .get('hashes')
           ?.toString()
-          ?.toUpperCase()
-          ?.split("|")
+          .toUpperCase()
+          .split('|')
           .filter(skipFalsy)
-        const categoryTitle = formData.get("category")?.toString()
+        const categoryTitle = formData.get('category')?.toString()
 
         if (categoryTitle && hashes?.length) {
           if (!isCategoryAllowed(categoryTitle)) {
-            console.log(`Ignoring setCategory for "${categoryTitle}" (not in allowed list)`);
+            console.log(
+              `Ignoring setCategory for "${categoryTitle}" (not in allowed list)`,
+            )
             return Response.json({})
           }
 
           await useAmule(async (amule) => {
             const categories = await amule.getCategories()
-            const categoryId = categories.find(c => c.title === categoryTitle)?.id
+            const categoryId = categories.find(
+              (c) => c.title === categoryTitle,
+            )?.id
             if (!categoryId) {
               throw new Error(`Category ${categoryTitle} not found`)
             }
 
             for (const hash of hashes) {
-              if (!await amule.setFileCategory(hash, categoryId)) {
+              if (!(await amule.setFileCategory(hash, categoryId))) {
                 throw new Error(`Failed to set category for torrent ${hash}`)
               }
             }
@@ -39,8 +42,7 @@ export const Route = createFileRoute('/api/v2/torrents/setCategory')({
         }
 
         return Response.json({})
-      }
-    }
+      },
+    },
   },
 })
-

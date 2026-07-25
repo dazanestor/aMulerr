@@ -3,7 +3,11 @@ import { toMagnetLink } from './links'
 
 describe('toMagnetLink', () => {
   it('generates aMulerr synthetic btih magnets', () => {
-    const magnet = toMagnetLink('A1B2C3D4E5F60718293A4B5C6D7E8F90', 'Test Book', 12345)
+    const magnet = toMagnetLink(
+      'A1B2C3D4E5F60718293A4B5C6D7E8F90',
+      'Test Book',
+      12345,
+    )
     expect(magnet).not.toBeNull()
   })
 

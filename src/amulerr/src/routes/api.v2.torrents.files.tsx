@@ -17,12 +17,15 @@ export const Route = createFileRoute('/api/v2/torrents/files')({
           const downloads = await amule.getDownloadQueue()
           const shared = await amule.getSharedFiles()
 
-          const download = downloads.find((item) => item.fileHash?.toLowerCase() === hash.toLowerCase())
+          const download = downloads.find(
+            (item) => item.fileHash.toLowerCase() === hash.toLowerCase(),
+          )
           if (download) {
             // qBittorrent's API reports progress as a 0-1 fraction, not raw bytes.
-            const progress = download.fileSize > 0
-              ? (download.fileSizeDownloaded ?? 0) / download.fileSize
-              : 0
+            const progress =
+              download.fileSize > 0
+                ? (download.fileSizeDownloaded ?? 0) / download.fileSize
+                : 0
             return {
               index: 0,
               name: download.fileName,
@@ -34,7 +37,9 @@ export const Route = createFileRoute('/api/v2/torrents/files')({
             }
           }
 
-          const sharedFile = shared.find((item) => item.fileHash?.toLowerCase() === hash.toLowerCase())
+          const sharedFile = shared.find(
+            (item) => item.fileHash?.toLowerCase() === hash.toLowerCase(),
+          )
           if (sharedFile) {
             return {
               index: 0,

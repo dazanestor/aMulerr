@@ -14,12 +14,13 @@ export const Route = createFileRoute('/api/v2/torrents/delete')({
         const hashes = formData
           .get('hashes')
           ?.toString()
-          ?.toUpperCase()
-          ?.split('|')
+          .toUpperCase()
+          .split('|')
           .filter(skipFalsy)
 
         const deleteFilesQsp = formData.get('deleteFiles')?.toString()
-        const deleteFiles = !deleteFilesQsp || deleteFilesQsp.toLowerCase() === 'true'
+        const deleteFiles =
+          !deleteFilesQsp || deleteFilesQsp.toLowerCase() === 'true'
 
         if (hashes?.length) {
           await useAmule(async (amule) => {
@@ -36,15 +37,19 @@ export const Route = createFileRoute('/api/v2/torrents/delete')({
               addDeletedHash(hash)
             }
 
-            // If the files exist on disk, delete them physically
-            for (const f of shared.filter(f => f.fileHash && hashes.includes(f.fileHash.toUpperCase()))) {
-              const fullPath = f.path && f.fileName ? `${f.path}/${f.fileName}` : ''
+            // If the files exist on disk, delete them physically (same matches computed above)
+            for (const f of matches) {
+              const fullPath =
+                f.path && f.fileName ? `${f.path}/${f.fileName}` : ''
               if (fullPath && fsSync.existsSync(fullPath)) {
                 try {
                   console.log(`Physically deleting file: ${fullPath}`)
                   fsSync.rmSync(fullPath, { force: true })
                 } catch (err: any) {
-                  console.error(`Failed to delete physical file ${fullPath}:`, err.message)
+                  console.error(
+                    `Failed to delete physical file ${fullPath}:`,
+                    err.message,
+                  )
                 }
               }
             }

@@ -1,20 +1,22 @@
-import base32 from "hi-base32"
+import base32 from 'hi-base32'
 
 function parseEd2kHash(value: string) {
   const normalized = value.trim().toUpperCase()
   if (!/^[0-9A-F]{32}$/.test(normalized)) {
     return null
   }
-  
+
   return normalized
 }
 
 export function toMagnetLink(hash: string, name: string, size: number) {
   const ed2kHash = parseEd2kHash(hash)
-  if (!ed2kHash) { return null }
+  if (!ed2kHash) {
+    return null
+  }
 
-  const hashBuffer = Buffer.from(ed2kHash, "hex")
-  const base32Buffer = Buffer.alloc(20, "\0")
+  const hashBuffer = Buffer.from(ed2kHash, 'hex')
+  const base32Buffer = Buffer.alloc(20, '\0')
   hashBuffer.copy(base32Buffer)
   const base32Hash = base32.encode(base32Buffer).toUpperCase()
 
@@ -31,11 +33,11 @@ export function fromMagnetLink(magnetLink: string) {
   } = extractMagnetLinkInfo.exec(magnetLink)?.groups ?? {}
 
   if (!base32Hash || !name || !size) {
-    throw new Error("Invalid magnet link")
+    throw new Error('Invalid magnet link')
   }
 
   const hash = Buffer.from(base32.decode.asBytes(base32Hash))
-    .toString("hex")
+    .toString('hex')
     .substring(0, 32)
     .toUpperCase()
   return { hash, name: decodeURIComponent(name), size: parseInt(size) }
@@ -52,13 +54,17 @@ export function fromEd2kLink(ed2kLink: string) {
   const { hash, name, size } = extractEd2kLinkInfo.exec(ed2kLink)?.groups ?? {}
 
   if (!hash || !name || !size) {
-    throw new Error("Invalid ed2k link")
+    throw new Error('Invalid ed2k link')
   }
 
   const ed2kHash = parseEd2kHash(hash)
   if (ed2kHash == null) {
-    throw new Error("Invalid ed2k hash")
+    throw new Error('Invalid ed2k hash')
   }
 
-  return { hash: ed2kHash, name: decodeURIComponent(name), size: parseInt(size) }
+  return {
+    hash: ed2kHash,
+    name: decodeURIComponent(name),
+    size: parseInt(size),
+  }
 }

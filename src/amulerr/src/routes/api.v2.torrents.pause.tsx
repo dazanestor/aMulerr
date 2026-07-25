@@ -1,4 +1,3 @@
-
 import { useAmule } from '#/amule'
 import { skipFalsy } from '#/lib/array'
 import { createFileRoute } from '@tanstack/react-router'
@@ -10,10 +9,10 @@ export const Route = createFileRoute('/api/v2/torrents/pause')({
       POST: async ({ request }) => {
         const formData = await request.formData()
         const hashes = formData
-          .get("hashes")
+          .get('hashes')
           ?.toString()
-          ?.toUpperCase()
-          ?.split("|")
+          .toUpperCase()
+          .split('|')
           .filter(skipFalsy)
 
         if (hashes?.length) {
@@ -24,8 +23,8 @@ export const Route = createFileRoute('/api/v2/torrents/pause')({
           })
         }
 
-        return new Response("Ok", { status: 200 })
-      }
-    }
+        return new Response('Ok', { status: 200 })
+      },
+    },
   },
 })

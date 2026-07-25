@@ -16,6 +16,7 @@ import { Route as ApiV2TorrentsStopRouteImport } from './routes/api.v2.torrents.
 import { Route as ApiV2TorrentsStartRouteImport } from './routes/api.v2.torrents.start'
 import { Route as ApiV2TorrentsSetCategoryRouteImport } from './routes/api.v2.torrents.setCategory'
 import { Route as ApiV2TorrentsResumeRouteImport } from './routes/api.v2.torrents.resume'
+import { Route as ApiV2TorrentsPropertiesRouteImport } from './routes/api.v2.torrents.properties'
 import { Route as ApiV2TorrentsPauseRouteImport } from './routes/api.v2.torrents.pause'
 import { Route as ApiV2TorrentsInfoRouteImport } from './routes/api.v2.torrents.info'
 import { Route as ApiV2TorrentsFilesRouteImport } from './routes/api.v2.torrents.files'
@@ -65,6 +66,11 @@ const ApiV2TorrentsSetCategoryRoute =
 const ApiV2TorrentsResumeRoute = ApiV2TorrentsResumeRouteImport.update({
   id: '/v2/torrents/resume',
   path: '/v2/torrents/resume',
+  getParentRoute: () => ApiRoute,
+} as any)
+const ApiV2TorrentsPropertiesRoute = ApiV2TorrentsPropertiesRouteImport.update({
+  id: '/v2/torrents/properties',
+  path: '/v2/torrents/properties',
   getParentRoute: () => ApiRoute,
 } as any)
 const ApiV2TorrentsPauseRoute = ApiV2TorrentsPauseRouteImport.update({
@@ -158,6 +164,7 @@ export interface FileRoutesByFullPath {
   '/api/v2/torrents/files': typeof ApiV2TorrentsFilesRoute
   '/api/v2/torrents/info': typeof ApiV2TorrentsInfoRoute
   '/api/v2/torrents/pause': typeof ApiV2TorrentsPauseRoute
+  '/api/v2/torrents/properties': typeof ApiV2TorrentsPropertiesRoute
   '/api/v2/torrents/resume': typeof ApiV2TorrentsResumeRoute
   '/api/v2/torrents/setCategory': typeof ApiV2TorrentsSetCategoryRoute
   '/api/v2/torrents/start': typeof ApiV2TorrentsStartRoute
@@ -181,6 +188,7 @@ export interface FileRoutesByTo {
   '/api/v2/torrents/files': typeof ApiV2TorrentsFilesRoute
   '/api/v2/torrents/info': typeof ApiV2TorrentsInfoRoute
   '/api/v2/torrents/pause': typeof ApiV2TorrentsPauseRoute
+  '/api/v2/torrents/properties': typeof ApiV2TorrentsPropertiesRoute
   '/api/v2/torrents/resume': typeof ApiV2TorrentsResumeRoute
   '/api/v2/torrents/setCategory': typeof ApiV2TorrentsSetCategoryRoute
   '/api/v2/torrents/start': typeof ApiV2TorrentsStartRoute
@@ -205,6 +213,7 @@ export interface FileRoutesById {
   '/api/v2/torrents/files': typeof ApiV2TorrentsFilesRoute
   '/api/v2/torrents/info': typeof ApiV2TorrentsInfoRoute
   '/api/v2/torrents/pause': typeof ApiV2TorrentsPauseRoute
+  '/api/v2/torrents/properties': typeof ApiV2TorrentsPropertiesRoute
   '/api/v2/torrents/resume': typeof ApiV2TorrentsResumeRoute
   '/api/v2/torrents/setCategory': typeof ApiV2TorrentsSetCategoryRoute
   '/api/v2/torrents/start': typeof ApiV2TorrentsStartRoute
@@ -230,6 +239,7 @@ export interface FileRouteTypes {
     | '/api/v2/torrents/files'
     | '/api/v2/torrents/info'
     | '/api/v2/torrents/pause'
+    | '/api/v2/torrents/properties'
     | '/api/v2/torrents/resume'
     | '/api/v2/torrents/setCategory'
     | '/api/v2/torrents/start'
@@ -253,6 +263,7 @@ export interface FileRouteTypes {
     | '/api/v2/torrents/files'
     | '/api/v2/torrents/info'
     | '/api/v2/torrents/pause'
+    | '/api/v2/torrents/properties'
     | '/api/v2/torrents/resume'
     | '/api/v2/torrents/setCategory'
     | '/api/v2/torrents/start'
@@ -276,6 +287,7 @@ export interface FileRouteTypes {
     | '/api/v2/torrents/files'
     | '/api/v2/torrents/info'
     | '/api/v2/torrents/pause'
+    | '/api/v2/torrents/properties'
     | '/api/v2/torrents/resume'
     | '/api/v2/torrents/setCategory'
     | '/api/v2/torrents/start'
@@ -337,6 +349,13 @@ declare module '@tanstack/react-router' {
       path: '/v2/torrents/resume'
       fullPath: '/api/v2/torrents/resume'
       preLoaderRoute: typeof ApiV2TorrentsResumeRouteImport
+      parentRoute: typeof ApiRoute
+    }
+    '/api/v2/torrents/properties': {
+      id: '/api/v2/torrents/properties'
+      path: '/v2/torrents/properties'
+      fullPath: '/api/v2/torrents/properties'
+      preLoaderRoute: typeof ApiV2TorrentsPropertiesRouteImport
       parentRoute: typeof ApiRoute
     }
     '/api/v2/torrents/pause': {
@@ -455,6 +474,7 @@ interface ApiRouteChildren {
   ApiV2TorrentsFilesRoute: typeof ApiV2TorrentsFilesRoute
   ApiV2TorrentsInfoRoute: typeof ApiV2TorrentsInfoRoute
   ApiV2TorrentsPauseRoute: typeof ApiV2TorrentsPauseRoute
+  ApiV2TorrentsPropertiesRoute: typeof ApiV2TorrentsPropertiesRoute
   ApiV2TorrentsResumeRoute: typeof ApiV2TorrentsResumeRoute
   ApiV2TorrentsSetCategoryRoute: typeof ApiV2TorrentsSetCategoryRoute
   ApiV2TorrentsStartRoute: typeof ApiV2TorrentsStartRoute
@@ -476,6 +496,7 @@ const ApiRouteChildren: ApiRouteChildren = {
   ApiV2TorrentsFilesRoute: ApiV2TorrentsFilesRoute,
   ApiV2TorrentsInfoRoute: ApiV2TorrentsInfoRoute,
   ApiV2TorrentsPauseRoute: ApiV2TorrentsPauseRoute,
+  ApiV2TorrentsPropertiesRoute: ApiV2TorrentsPropertiesRoute,
   ApiV2TorrentsResumeRoute: ApiV2TorrentsResumeRoute,
   ApiV2TorrentsSetCategoryRoute: ApiV2TorrentsSetCategoryRoute,
   ApiV2TorrentsStartRoute: ApiV2TorrentsStartRoute,
