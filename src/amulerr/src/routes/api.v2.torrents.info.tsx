@@ -84,6 +84,18 @@ export const Route = createFileRoute('/api/v2/torrents/info')({
             time_active: f.downloadActiveTime,
             added_on:
               Math.floor(Date.now() / 1000) - (f.downloadActiveTime ?? 0),
+            // aMule has no seed ratio/time enforcement, so there's no real
+            // per-torrent limit to report — but explicitly reporting a
+            // *reached* limit (0 required, already satisfied) matters:
+            // Radarr/Sonarr's HasReachedSeedLimit() short-circuits to false
+            // whenever the per-torrent limit is left at -2/"use global" AND
+            // the global limit is disabled (which ours is, in preferences).
+            // Without this, CanMoveFiles/CanBeRemoved are always false, so
+            // completed downloads get imported via Copy instead of Move and
+            // are never auto-removed from the queue — silently doubling
+            // disk usage forever.
+            seeding_time_limit: 0,
+            seeding_time: f.downloadActiveTime ?? 0,
           })),
           ...filteredShared.map((f) => ({
             hash: f.fileHash,
@@ -97,6 +109,8 @@ export const Route = createFileRoute('/api/v2/torrents/info')({
             content_path: `${f.path}/${f.fileName}`,
             save_path: f.path,
             category: f.category_obj?.title,
+            seeding_time_limit: 0,
+            seeding_time: 0,
           })),
         ])
       },
