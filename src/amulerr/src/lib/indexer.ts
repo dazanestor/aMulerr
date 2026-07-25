@@ -43,12 +43,22 @@ export const itemsResponse = (
       // empty and any infohash-based dedup/history matching can't work.
       const infoHash = magnetLink.split('urn:btih:')[1]?.split('&')[0]
 
+      // Backdated 24h on purpose: a pubDate that's ever in the future
+      // relative to Radarr/Sonarr's own clock (even by a few seconds, from
+      // ordinary clock drift) computes a negative release "age" in their
+      // UI/sorting. There's no real single publish timestamp for an
+      // on-the-fly aMule search result anyway, so a full day of safety
+      // margin costs nothing.
+      const pubDate = buildRFC822Date(
+        new Date(Date.now() - 24 * 60 * 60 * 1000),
+      )
+
       return `
           <item>
             <title>${encode(item.fileName)}</title>
             <guid>${item.fileHash}-${encode(item.fileName)}</guid>
             <link>${encode(magnetLink)}</link>
-            <pubDate>${buildRFC822Date(new Date())}</pubDate>
+            <pubDate>${pubDate}</pubDate>
             <enclosure url="${encode(magnetLink)}" length="${item.fileSize}" type="application/x-bittorrent" />
             <torznab:attr name="size" value="${item.fileSize}" />
             <torznab:attr name="magneturl" value="${encode(magnetLink)}" />
