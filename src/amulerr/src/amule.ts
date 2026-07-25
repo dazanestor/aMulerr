@@ -29,6 +29,17 @@ export async function useAmule<T>(fn: (client: AmuleClient) => T) {
   try {
     await amuleClient.connect()
     return await fn(amuleClient)
+  } catch (err) {
+    // Route handlers don't wrap their useAmule() call in their own
+    // try/catch, so a failure here (observed live: a /torrents/delete call
+    // failed with a bare "500 unhandled" in Radarr's log, with nothing on
+    // our side to diagnose it — Radarr's own retry eventually got it
+    // through, so this was a transient EC hiccup, not a logic bug, but
+    // there was no way to tell that from our own logs at the time) had zero
+    // diagnostic trail. Log before rethrowing so the HTTP-level behavior
+    // (still a 500, still retried by Radarr/Sonarr) is unchanged.
+    console.error('[useAmule] aMule operation failed:', err)
+    throw err
   } finally {
     amuleClient.close()
   }
