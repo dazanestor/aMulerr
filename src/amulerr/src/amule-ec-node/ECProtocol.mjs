@@ -458,7 +458,12 @@ class ECProtocol {
     } else if (tagType === EC_TAG_TYPES.EC_TAGTYPE_UINT64) {
       humanValue = tagValue.readBigUInt64BE(0).toString();
     } else if (tagType === EC_TAG_TYPES.EC_TAGTYPE_UINT128) {
-      humanValue = tagValue.readBigUInt64BE(0).toString() + tagValue.readBigUInt64BE(8).toString();
+      // Combine the two big-endian 64-bit halves into one 128-bit integer
+      // (high << 64n | low) — string-concatenating the two decimal halves,
+      // as before, produced a number with no numeric relation to the real value.
+      const high = tagValue.readBigUInt64BE(0);
+      const low = tagValue.readBigUInt64BE(8);
+      humanValue = ((high << 64n) | low).toString();
     } else if (tagType === EC_TAG_TYPES.EC_TAGTYPE_STRING) {
       humanValue = tagValue.toString('utf8').replace(/\0+$/, '');
     } else if (tagType === EC_TAG_TYPES.EC_TAGTYPE_DOUBLE) {

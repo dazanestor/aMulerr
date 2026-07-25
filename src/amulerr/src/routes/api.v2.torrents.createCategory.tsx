@@ -33,7 +33,10 @@ export const Route = createFileRoute('/api/v2/torrents/createCategory')({
                 throw new Error(`Failed to update category ${categoryTitle}`)
               }
             } else {
-              if (!await amule.createCategory(categoryTitle, `${defaultPath}/${categoryTitle}`, "amulerr")) {
+              // createCategory resolves to { success, categoryId }, not a boolean —
+              // negating the whole object was always false (objects are truthy),
+              // so a real failure here was never surfaced as an error.
+              if (!(await amule.createCategory(categoryTitle, `${defaultPath}/${categoryTitle}`, "amulerr")).success) {
                 throw new Error(`Failed to create category ${categoryTitle}`)
               }
             }

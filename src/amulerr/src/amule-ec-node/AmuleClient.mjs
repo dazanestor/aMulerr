@@ -350,7 +350,9 @@ class AmuleClient {
     const seenDownloads = new Set();
     for (const tag of response.tags) {
       if (tag.tagId !== EC_TAGS.EC_TAG_PARTFILE) continue;
-      const ecid = tag.humanValue || tag.value;
+      // ?? not || : an ecid of 0 is a valid identifier and must not be
+      // replaced by the raw Buffer fallback (same falsy-zero class as categoryId).
+      const ecid = tag.humanValue ?? tag.value;
       seenDownloads.add(ecid);
       const existing = this._updateState.downloads.get(ecid) || { ecid };
       const updates = this._parseDownloadFields(tag);
@@ -400,7 +402,8 @@ class AmuleClient {
     const seenSharedFiles = new Set();
     for (const tag of response.tags) {
       if (tag.tagId !== EC_TAGS.EC_TAG_KNOWNFILE) continue;
-      const ecid = tag.humanValue || tag.value;
+      // ?? not || : same falsy-zero-ecid reasoning as the downloads loop above.
+      const ecid = tag.humanValue ?? tag.value;
       seenSharedFiles.add(ecid);
       const existing = this._updateState.sharedFiles.get(ecid) || { ecid };
       const updates = this._parseSharedFileFields(tag);
@@ -455,7 +458,8 @@ class AmuleClient {
       const seenClients = new Set();
       const clientTags = clientContainer.children.filter(c => c.tagId === EC_TAGS.EC_TAG_CLIENT);
       for (const clientTag of clientTags) {
-        const ecid = clientTag.humanValue || clientTag.value;
+        // ?? not || : same falsy-zero-ecid reasoning as the downloads loop above.
+        const ecid = clientTag.humanValue ?? clientTag.value;
         seenClients.add(ecid);
         const existing = this._updateState.clients.get(ecid) || { ecid };
         const updates = this._parseClientFields(clientTag);
