@@ -176,6 +176,7 @@ declare module '#/amule-ec-node/AmuleClient.mjs' {
     ): Promise<boolean>
     deleteCategory(categoryId: number): Promise<boolean>
     setFileCategory(fileHash: string, categoryId: number): Promise<boolean>
+    setDownloadPriority(fileHash: string, priority: number): Promise<boolean>
 
     renameFile(fileHash: string, newName: string): Promise<RenameResult>
     setFileRatingComment(

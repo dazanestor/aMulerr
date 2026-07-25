@@ -12,8 +12,11 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as HealthRouteImport } from './routes/health'
 import { Route as ApiRouteImport } from './routes/api'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ApiV2TorrentsTopPrioRouteImport } from './routes/api.v2.torrents.topPrio'
 import { Route as ApiV2TorrentsStopRouteImport } from './routes/api.v2.torrents.stop'
 import { Route as ApiV2TorrentsStartRouteImport } from './routes/api.v2.torrents.start'
+import { Route as ApiV2TorrentsSetShareLimitsRouteImport } from './routes/api.v2.torrents.setShareLimits'
+import { Route as ApiV2TorrentsSetForceStartRouteImport } from './routes/api.v2.torrents.setForceStart'
 import { Route as ApiV2TorrentsSetCategoryRouteImport } from './routes/api.v2.torrents.setCategory'
 import { Route as ApiV2TorrentsResumeRouteImport } from './routes/api.v2.torrents.resume'
 import { Route as ApiV2TorrentsPropertiesRouteImport } from './routes/api.v2.torrents.properties'
@@ -47,6 +50,11 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiV2TorrentsTopPrioRoute = ApiV2TorrentsTopPrioRouteImport.update({
+  id: '/v2/torrents/topPrio',
+  path: '/v2/torrents/topPrio',
+  getParentRoute: () => ApiRoute,
+} as any)
 const ApiV2TorrentsStopRoute = ApiV2TorrentsStopRouteImport.update({
   id: '/v2/torrents/stop',
   path: '/v2/torrents/stop',
@@ -57,6 +65,18 @@ const ApiV2TorrentsStartRoute = ApiV2TorrentsStartRouteImport.update({
   path: '/v2/torrents/start',
   getParentRoute: () => ApiRoute,
 } as any)
+const ApiV2TorrentsSetShareLimitsRoute =
+  ApiV2TorrentsSetShareLimitsRouteImport.update({
+    id: '/v2/torrents/setShareLimits',
+    path: '/v2/torrents/setShareLimits',
+    getParentRoute: () => ApiRoute,
+  } as any)
+const ApiV2TorrentsSetForceStartRoute =
+  ApiV2TorrentsSetForceStartRouteImport.update({
+    id: '/v2/torrents/setForceStart',
+    path: '/v2/torrents/setForceStart',
+    getParentRoute: () => ApiRoute,
+  } as any)
 const ApiV2TorrentsSetCategoryRoute =
   ApiV2TorrentsSetCategoryRouteImport.update({
     id: '/v2/torrents/setCategory',
@@ -167,8 +187,11 @@ export interface FileRoutesByFullPath {
   '/api/v2/torrents/properties': typeof ApiV2TorrentsPropertiesRoute
   '/api/v2/torrents/resume': typeof ApiV2TorrentsResumeRoute
   '/api/v2/torrents/setCategory': typeof ApiV2TorrentsSetCategoryRoute
+  '/api/v2/torrents/setForceStart': typeof ApiV2TorrentsSetForceStartRoute
+  '/api/v2/torrents/setShareLimits': typeof ApiV2TorrentsSetShareLimitsRoute
   '/api/v2/torrents/start': typeof ApiV2TorrentsStartRoute
   '/api/v2/torrents/stop': typeof ApiV2TorrentsStopRoute
+  '/api/v2/torrents/topPrio': typeof ApiV2TorrentsTopPrioRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -191,8 +214,11 @@ export interface FileRoutesByTo {
   '/api/v2/torrents/properties': typeof ApiV2TorrentsPropertiesRoute
   '/api/v2/torrents/resume': typeof ApiV2TorrentsResumeRoute
   '/api/v2/torrents/setCategory': typeof ApiV2TorrentsSetCategoryRoute
+  '/api/v2/torrents/setForceStart': typeof ApiV2TorrentsSetForceStartRoute
+  '/api/v2/torrents/setShareLimits': typeof ApiV2TorrentsSetShareLimitsRoute
   '/api/v2/torrents/start': typeof ApiV2TorrentsStartRoute
   '/api/v2/torrents/stop': typeof ApiV2TorrentsStopRoute
+  '/api/v2/torrents/topPrio': typeof ApiV2TorrentsTopPrioRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -216,8 +242,11 @@ export interface FileRoutesById {
   '/api/v2/torrents/properties': typeof ApiV2TorrentsPropertiesRoute
   '/api/v2/torrents/resume': typeof ApiV2TorrentsResumeRoute
   '/api/v2/torrents/setCategory': typeof ApiV2TorrentsSetCategoryRoute
+  '/api/v2/torrents/setForceStart': typeof ApiV2TorrentsSetForceStartRoute
+  '/api/v2/torrents/setShareLimits': typeof ApiV2TorrentsSetShareLimitsRoute
   '/api/v2/torrents/start': typeof ApiV2TorrentsStartRoute
   '/api/v2/torrents/stop': typeof ApiV2TorrentsStopRoute
+  '/api/v2/torrents/topPrio': typeof ApiV2TorrentsTopPrioRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -242,8 +271,11 @@ export interface FileRouteTypes {
     | '/api/v2/torrents/properties'
     | '/api/v2/torrents/resume'
     | '/api/v2/torrents/setCategory'
+    | '/api/v2/torrents/setForceStart'
+    | '/api/v2/torrents/setShareLimits'
     | '/api/v2/torrents/start'
     | '/api/v2/torrents/stop'
+    | '/api/v2/torrents/topPrio'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -266,8 +298,11 @@ export interface FileRouteTypes {
     | '/api/v2/torrents/properties'
     | '/api/v2/torrents/resume'
     | '/api/v2/torrents/setCategory'
+    | '/api/v2/torrents/setForceStart'
+    | '/api/v2/torrents/setShareLimits'
     | '/api/v2/torrents/start'
     | '/api/v2/torrents/stop'
+    | '/api/v2/torrents/topPrio'
   id:
     | '__root__'
     | '/'
@@ -290,8 +325,11 @@ export interface FileRouteTypes {
     | '/api/v2/torrents/properties'
     | '/api/v2/torrents/resume'
     | '/api/v2/torrents/setCategory'
+    | '/api/v2/torrents/setForceStart'
+    | '/api/v2/torrents/setShareLimits'
     | '/api/v2/torrents/start'
     | '/api/v2/torrents/stop'
+    | '/api/v2/torrents/topPrio'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -323,6 +361,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/v2/torrents/topPrio': {
+      id: '/api/v2/torrents/topPrio'
+      path: '/v2/torrents/topPrio'
+      fullPath: '/api/v2/torrents/topPrio'
+      preLoaderRoute: typeof ApiV2TorrentsTopPrioRouteImport
+      parentRoute: typeof ApiRoute
+    }
     '/api/v2/torrents/stop': {
       id: '/api/v2/torrents/stop'
       path: '/v2/torrents/stop'
@@ -335,6 +380,20 @@ declare module '@tanstack/react-router' {
       path: '/v2/torrents/start'
       fullPath: '/api/v2/torrents/start'
       preLoaderRoute: typeof ApiV2TorrentsStartRouteImport
+      parentRoute: typeof ApiRoute
+    }
+    '/api/v2/torrents/setShareLimits': {
+      id: '/api/v2/torrents/setShareLimits'
+      path: '/v2/torrents/setShareLimits'
+      fullPath: '/api/v2/torrents/setShareLimits'
+      preLoaderRoute: typeof ApiV2TorrentsSetShareLimitsRouteImport
+      parentRoute: typeof ApiRoute
+    }
+    '/api/v2/torrents/setForceStart': {
+      id: '/api/v2/torrents/setForceStart'
+      path: '/v2/torrents/setForceStart'
+      fullPath: '/api/v2/torrents/setForceStart'
+      preLoaderRoute: typeof ApiV2TorrentsSetForceStartRouteImport
       parentRoute: typeof ApiRoute
     }
     '/api/v2/torrents/setCategory': {
@@ -477,8 +536,11 @@ interface ApiRouteChildren {
   ApiV2TorrentsPropertiesRoute: typeof ApiV2TorrentsPropertiesRoute
   ApiV2TorrentsResumeRoute: typeof ApiV2TorrentsResumeRoute
   ApiV2TorrentsSetCategoryRoute: typeof ApiV2TorrentsSetCategoryRoute
+  ApiV2TorrentsSetForceStartRoute: typeof ApiV2TorrentsSetForceStartRoute
+  ApiV2TorrentsSetShareLimitsRoute: typeof ApiV2TorrentsSetShareLimitsRoute
   ApiV2TorrentsStartRoute: typeof ApiV2TorrentsStartRoute
   ApiV2TorrentsStopRoute: typeof ApiV2TorrentsStopRoute
+  ApiV2TorrentsTopPrioRoute: typeof ApiV2TorrentsTopPrioRoute
 }
 
 const ApiRouteChildren: ApiRouteChildren = {
@@ -499,8 +561,11 @@ const ApiRouteChildren: ApiRouteChildren = {
   ApiV2TorrentsPropertiesRoute: ApiV2TorrentsPropertiesRoute,
   ApiV2TorrentsResumeRoute: ApiV2TorrentsResumeRoute,
   ApiV2TorrentsSetCategoryRoute: ApiV2TorrentsSetCategoryRoute,
+  ApiV2TorrentsSetForceStartRoute: ApiV2TorrentsSetForceStartRoute,
+  ApiV2TorrentsSetShareLimitsRoute: ApiV2TorrentsSetShareLimitsRoute,
   ApiV2TorrentsStartRoute: ApiV2TorrentsStartRoute,
   ApiV2TorrentsStopRoute: ApiV2TorrentsStopRoute,
+  ApiV2TorrentsTopPrioRoute: ApiV2TorrentsTopPrioRoute,
 }
 
 const ApiRouteWithChildren = ApiRoute._addFileChildren(ApiRouteChildren)

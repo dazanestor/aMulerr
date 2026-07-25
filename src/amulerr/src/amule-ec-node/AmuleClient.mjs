@@ -1043,6 +1043,51 @@ class AmuleClient {
   }
 
   /**
+   * Set a download's queue priority.
+   * As per aMule source (ExternalConn.cpp EC_OP_PARTFILE_PRIO_SET): the child
+   * tag carries the raw priority value — PR_LOW=0, PR_NORMAL=1, PR_HIGH=2,
+   * PR_VERYHIGH=3, PR_AUTO=5 (auto-priority based on source count/rarity).
+   * @param {string} fileHash - MD4 hash of the file
+   * @param {number} priority - Priority level (see values above)
+   * @returns {Promise<boolean>} True if the priority was set successfully
+   */
+  async setDownloadPriority(fileHash, priority) {
+    if (DEBUG)
+      console.log(
+        '[DEBUG] Setting download priority:',
+        fileHash,
+        '->',
+        priority,
+      )
+
+    const children = [
+      {
+        tagId: EC_TAGS.EC_TAG_PARTFILE_PRIO,
+        tagType: EC_TAG_TYPES.EC_TAGTYPE_UINT8,
+        value: priority,
+      },
+    ]
+
+    const reqTags = [
+      this.session.createTag(
+        EC_TAGS.EC_TAG_PARTFILE,
+        EC_TAG_TYPES.EC_TAGTYPE_HASH16,
+        fileHash,
+        children,
+      ),
+    ]
+
+    const response = await this.session.sendPacket(
+      EC_OPCODES.EC_OP_PARTFILE_PRIO_SET,
+      reqTags,
+    )
+
+    if (DEBUG) console.log('[DEBUG] Received response:', response)
+
+    return this._isSuccess(response)
+  }
+
+  /**
    * Rename a file (download or shared).
    * Searches the download queue first, then known (shared) files.
    * @param {string} fileHash - MD4 hash of the file to rename
