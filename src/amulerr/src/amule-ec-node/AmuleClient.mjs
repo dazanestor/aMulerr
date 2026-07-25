@@ -240,7 +240,13 @@ class AmuleClient {
 
     if (DEBUG) console.log('[DEBUG] Received response:', response)
 
+    // As per aMule source (ECSpecialCoreTags.cpp CEC_SharedFile_Tag): the
+    // top-level EC_TAG_KNOWNFILE tag itself carries the file's ECID as its
+    // own value — it was never read here, so every returned item's `ecid`
+    // was silently undefined (callers like torrents/delete's clearCompleted
+    // rely on it to identify which file to clear).
     return response.tags.map((tag) => ({
+      ecid: tag.humanValue ?? tag.value,
       ...this._parseSharedFileFields(tag),
       raw: this.buildTagTree(tag.children),
     }))
@@ -329,6 +335,11 @@ class AmuleClient {
 
     return response.tags.map((tag) => {
       const fields = this._parseDownloadFields(tag)
+      // As per aMule source (ECSpecialCoreTags.cpp CEC_PartFile_Tag ->
+      // CEC_SharedFile_Tag base): the top-level EC_TAG_PARTFILE tag itself
+      // carries the file's ECID as its own value — same gap as
+      // getSharedFiles() below, same reason it matters for clearCompleted.
+      fields.ecid = tag.humanValue ?? tag.value
       // Decode buffer fields (full data, no XOR — use ecid=0 as throwaway state)
       this._reconstructBufferFields(0, fields)
       if (this._ecBufferState) this._ecBufferState.delete(0)
