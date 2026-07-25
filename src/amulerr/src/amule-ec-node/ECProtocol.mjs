@@ -52,12 +52,21 @@ class ECProtocol {
   }
 
   setupSocketListeners() {
+    // Node never awaits (or attaches a rejection handler to) the return
+    // value of an "on" listener — if reconnect() ultimately rejects (all
+    // retries exhausted), an unawaited call here becomes an unhandled
+    // promise rejection instead of the graceful "give up until the next
+    // close/error event" behavior we actually want. Catch and log instead.
     this.socket.on('close', async () => {
       this.rejectPendingRequests(new Error('Connection closed'))
 
       if (this.manualClose === false && !this.reconnecting) {
         console.warn('[ECProtocol] Connection closed. Attempting reconnect...')
-        await this.reconnect()
+        try {
+          await this.reconnect()
+        } catch (err) {
+          console.error('[ECProtocol] Reconnect failed:', err.message)
+        }
       }
     })
 
@@ -69,7 +78,11 @@ class ECProtocol {
       if (!this.socket.destroyed) this.socket.destroy()
 
       if (!this.reconnecting) {
-        await this.reconnect()
+        try {
+          await this.reconnect()
+        } catch (reconnectErr) {
+          console.error('[ECProtocol] Reconnect failed:', reconnectErr.message)
+        }
       }
     })
   }
