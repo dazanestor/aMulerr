@@ -19,16 +19,24 @@ export const Route = createFileRoute('/api/v2/torrents/createCategory')({
           }
 
           await useAmule(async (amule) => {
-            const dummyCategory = Math.random().toString(36).substring(2)
-            const dummyCategoryId = (await amule.createCategory(dummyCategory))
-              .categoryId!
+            // Used to create-then-immediately-delete a throwaway category
+            // just to read its default path. That's a real, confirmed
+            // aMule daemon crash (isc30/aMulerr#17: "Assertion '__n <
+            // this->size()' failed" -> Aborted, repeatedly reproduced
+            // right after 'ExternalConn: adding link ...'): category
+            // creation appends to a plain std::vector and deletion does a
+            // vector::erase, which shifts every later index down by one.
+            // Two concurrent createCategory calls (e.g. Radarr and Sonarr
+            // both provisioning their category around the same time, which
+            // is the normal case for this bridge) can interleave so one
+            // request's dummy sits at an index the other request then
+            // deletes out from under it, leaving a stale, now out-of-range
+            // category id — the exact crash in the reports. Querying the
+            // incoming dir directly (the same value aMule itself assigns as
+            // a new category's default path) needs no create/delete at all.
+            const incomingDir = await amule.getIncomingDir()
 
             const categories = await amule.getCategories()
-            await amule.deleteCategory(dummyCategoryId)
-
-            const defaultPath = categories.find(
-              (c) => c.id === dummyCategoryId,
-            )?.path
             const category = categories.find((c) => c.title === categoryTitle)
 
             if (category) {
@@ -36,7 +44,7 @@ export const Route = createFileRoute('/api/v2/torrents/createCategory')({
                 !(await amule.updateCategory(
                   category.id,
                   categoryTitle,
-                  `${defaultPath}/${categoryTitle}`,
+                  `${incomingDir}/${categoryTitle}`,
                   'amulerr',
                 ))
               ) {
@@ -50,7 +58,7 @@ export const Route = createFileRoute('/api/v2/torrents/createCategory')({
                 !(
                   await amule.createCategory(
                     categoryTitle,
-                    `${defaultPath}/${categoryTitle}`,
+                    `${incomingDir}/${categoryTitle}`,
                     'amulerr',
                   )
                 ).success

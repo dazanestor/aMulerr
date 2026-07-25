@@ -819,6 +819,45 @@ class AmuleClient {
   }
 
   /**
+   * Get aMule's configured default incoming (download) directory.
+   * As per aMule source (ECSpecialMuleTags.cpp / Preferences.cpp
+   * CreateCategory): thePrefs::GetIncomingDir() is the exact same value
+   * aMule assigns as a newly-created category's default path — querying
+   * it directly here avoids creating-then-deleting a throwaway category
+   * just to read it (see createCategory.tsx for why that matters: it was
+   * racing with concurrent category creation and crashing the aMule
+   * daemon with an out-of-bounds vector access).
+   * @returns {Promise<string|null>} The incoming directory path, or null if unavailable
+   */
+  async getIncomingDir() {
+    if (DEBUG) console.log('[DEBUG] Requesting incoming directory...')
+
+    const reqTags = [
+      this.session.createTag(
+        EC_TAGS.EC_TAG_SELECT_PREFS,
+        EC_TAG_TYPES.EC_TAGTYPE_UINT32,
+        EC_PREFS.EC_PREFS_DIRECTORIES,
+      ),
+    ]
+
+    const response = await this.session.sendPacket(
+      EC_OPCODES.EC_OP_GET_PREFERENCES,
+      reqTags,
+    )
+
+    if (DEBUG) console.log('[DEBUG] Received response:', response)
+
+    const dirPrefsTag = response.tags.find(
+      (t) => t.tagId === EC_TAGS.EC_TAG_PREFS_DIRECTORIES,
+    )
+    const incomingTag = dirPrefsTag?.children?.find(
+      (t) => t.tagId === EC_TAGS.EC_TAG_DIRECTORIES_INCOMING,
+    )
+
+    return incomingTag?.humanValue ?? null
+  }
+
+  /**
    * Get all aMule categories.
    * @returns {Promise<Object[]>} Array of category objects with { id, title, path, comment, color, priority }
    */

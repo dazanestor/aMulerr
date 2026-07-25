@@ -158,6 +158,7 @@ declare module '#/amule-ec-node/AmuleClient.mjs' {
     pauseDownload(fileHash: string): Promise<boolean>
     resumeDownload(fileHash: string): Promise<boolean>
 
+    getIncomingDir(): Promise<string | null>
     getCategories(): Promise<Category[]>
     createCategory(
       title: string,
