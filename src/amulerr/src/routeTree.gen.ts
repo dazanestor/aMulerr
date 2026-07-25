@@ -27,6 +27,7 @@ import { Route as ApiV2TorrentsDeleteCategoryRouteImport } from './routes/api.v2
 import { Route as ApiV2TorrentsDeleteRouteImport } from './routes/api.v2.torrents.delete'
 import { Route as ApiV2TorrentsCreateCategoryRouteImport } from './routes/api.v2.torrents.createCategory'
 import { Route as ApiV2TorrentsCategoriesRouteImport } from './routes/api.v2.torrents.categories'
+import { Route as ApiV2TorrentsAddTagsRouteImport } from './routes/api.v2.torrents.addTags'
 import { Route as ApiV2TorrentsAddRouteImport } from './routes/api.v2.torrents.add'
 import { Route as ApiV2SyncMaindataRouteImport } from './routes/api.v2.sync.maindata'
 import { Route as ApiV2AuthLogoutRouteImport } from './routes/api.v2.auth.logout'
@@ -130,6 +131,11 @@ const ApiV2TorrentsCategoriesRoute = ApiV2TorrentsCategoriesRouteImport.update({
   path: '/v2/torrents/categories',
   getParentRoute: () => ApiRoute,
 } as any)
+const ApiV2TorrentsAddTagsRoute = ApiV2TorrentsAddTagsRouteImport.update({
+  id: '/v2/torrents/addTags',
+  path: '/v2/torrents/addTags',
+  getParentRoute: () => ApiRoute,
+} as any)
 const ApiV2TorrentsAddRoute = ApiV2TorrentsAddRouteImport.update({
   id: '/v2/torrents/add',
   path: '/v2/torrents/add',
@@ -177,6 +183,7 @@ export interface FileRoutesByFullPath {
   '/api/v2/auth/logout': typeof ApiV2AuthLogoutRoute
   '/api/v2/sync/maindata': typeof ApiV2SyncMaindataRoute
   '/api/v2/torrents/add': typeof ApiV2TorrentsAddRoute
+  '/api/v2/torrents/addTags': typeof ApiV2TorrentsAddTagsRoute
   '/api/v2/torrents/categories': typeof ApiV2TorrentsCategoriesRoute
   '/api/v2/torrents/createCategory': typeof ApiV2TorrentsCreateCategoryRoute
   '/api/v2/torrents/delete': typeof ApiV2TorrentsDeleteRoute
@@ -204,6 +211,7 @@ export interface FileRoutesByTo {
   '/api/v2/auth/logout': typeof ApiV2AuthLogoutRoute
   '/api/v2/sync/maindata': typeof ApiV2SyncMaindataRoute
   '/api/v2/torrents/add': typeof ApiV2TorrentsAddRoute
+  '/api/v2/torrents/addTags': typeof ApiV2TorrentsAddTagsRoute
   '/api/v2/torrents/categories': typeof ApiV2TorrentsCategoriesRoute
   '/api/v2/torrents/createCategory': typeof ApiV2TorrentsCreateCategoryRoute
   '/api/v2/torrents/delete': typeof ApiV2TorrentsDeleteRoute
@@ -232,6 +240,7 @@ export interface FileRoutesById {
   '/api/v2/auth/logout': typeof ApiV2AuthLogoutRoute
   '/api/v2/sync/maindata': typeof ApiV2SyncMaindataRoute
   '/api/v2/torrents/add': typeof ApiV2TorrentsAddRoute
+  '/api/v2/torrents/addTags': typeof ApiV2TorrentsAddTagsRoute
   '/api/v2/torrents/categories': typeof ApiV2TorrentsCategoriesRoute
   '/api/v2/torrents/createCategory': typeof ApiV2TorrentsCreateCategoryRoute
   '/api/v2/torrents/delete': typeof ApiV2TorrentsDeleteRoute
@@ -261,6 +270,7 @@ export interface FileRouteTypes {
     | '/api/v2/auth/logout'
     | '/api/v2/sync/maindata'
     | '/api/v2/torrents/add'
+    | '/api/v2/torrents/addTags'
     | '/api/v2/torrents/categories'
     | '/api/v2/torrents/createCategory'
     | '/api/v2/torrents/delete'
@@ -288,6 +298,7 @@ export interface FileRouteTypes {
     | '/api/v2/auth/logout'
     | '/api/v2/sync/maindata'
     | '/api/v2/torrents/add'
+    | '/api/v2/torrents/addTags'
     | '/api/v2/torrents/categories'
     | '/api/v2/torrents/createCategory'
     | '/api/v2/torrents/delete'
@@ -315,6 +326,7 @@ export interface FileRouteTypes {
     | '/api/v2/auth/logout'
     | '/api/v2/sync/maindata'
     | '/api/v2/torrents/add'
+    | '/api/v2/torrents/addTags'
     | '/api/v2/torrents/categories'
     | '/api/v2/torrents/createCategory'
     | '/api/v2/torrents/delete'
@@ -466,6 +478,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiV2TorrentsCategoriesRouteImport
       parentRoute: typeof ApiRoute
     }
+    '/api/v2/torrents/addTags': {
+      id: '/api/v2/torrents/addTags'
+      path: '/v2/torrents/addTags'
+      fullPath: '/api/v2/torrents/addTags'
+      preLoaderRoute: typeof ApiV2TorrentsAddTagsRouteImport
+      parentRoute: typeof ApiRoute
+    }
     '/api/v2/torrents/add': {
       id: '/api/v2/torrents/add'
       path: '/v2/torrents/add'
@@ -526,6 +545,7 @@ interface ApiRouteChildren {
   ApiV2AuthLogoutRoute: typeof ApiV2AuthLogoutRoute
   ApiV2SyncMaindataRoute: typeof ApiV2SyncMaindataRoute
   ApiV2TorrentsAddRoute: typeof ApiV2TorrentsAddRoute
+  ApiV2TorrentsAddTagsRoute: typeof ApiV2TorrentsAddTagsRoute
   ApiV2TorrentsCategoriesRoute: typeof ApiV2TorrentsCategoriesRoute
   ApiV2TorrentsCreateCategoryRoute: typeof ApiV2TorrentsCreateCategoryRoute
   ApiV2TorrentsDeleteRoute: typeof ApiV2TorrentsDeleteRoute
@@ -551,6 +571,7 @@ const ApiRouteChildren: ApiRouteChildren = {
   ApiV2AuthLogoutRoute: ApiV2AuthLogoutRoute,
   ApiV2SyncMaindataRoute: ApiV2SyncMaindataRoute,
   ApiV2TorrentsAddRoute: ApiV2TorrentsAddRoute,
+  ApiV2TorrentsAddTagsRoute: ApiV2TorrentsAddTagsRoute,
   ApiV2TorrentsCategoriesRoute: ApiV2TorrentsCategoriesRoute,
   ApiV2TorrentsCreateCategoryRoute: ApiV2TorrentsCreateCategoryRoute,
   ApiV2TorrentsDeleteRoute: ApiV2TorrentsDeleteRoute,
