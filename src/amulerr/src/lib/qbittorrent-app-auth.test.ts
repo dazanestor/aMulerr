@@ -7,15 +7,18 @@ import {
 
 type RouteHandler = (ctx: { request: Request }) => Promise<Response>
 
-function getHandler(
-  route: {
-    options?: {
-      server?: { handlers?: { GET?: RouteHandler; POST?: RouteHandler } }
+// TanStack's real Route type is a deeply generic type parameterized by the
+// whole route tree; matching it exactly here would fight the type system for
+// no benefit in a test helper that only needs the runtime shape below (which
+// the handler-presence check already validates).
+function getHandler(route: unknown, method: 'GET' | 'POST' = 'GET') {
+  const handler = (
+    route as {
+      options?: {
+        server?: { handlers?: { GET?: RouteHandler; POST?: RouteHandler } }
+      }
     }
-  },
-  method: 'GET' | 'POST' = 'GET',
-) {
-  const handler = route.options?.server?.handlers?.[method]
+  ).options?.server?.handlers?.[method]
   if (!handler) {
     throw new Error(`Missing ${method} handler`)
   }

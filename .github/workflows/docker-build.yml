@@ -34,6 +34,10 @@ jobs:
         working-directory: src/amulerr
         run: pnpm install --frozen-lockfile
 
+      - name: Typecheck
+        working-directory: src/amulerr
+        run: pnpm typecheck
+
       - name: Run tests
         working-directory: src/amulerr
         run: pnpm test

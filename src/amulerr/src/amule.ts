@@ -26,13 +26,32 @@ export async function useAmule<T>(fn: (client: AmuleClient) => T) {
     }
 }
 
+const CACHE_TTL_MS = 1000 * 60 * 5 // 5 minutes
+
 const searchMutex = new Mutex()
 const searchCache = new Map<string, { timestamp: Date, data: DownloadItem[] }>()
+
+// Entries only get evicted when the *same* query is searched again, so distinct
+// queries (every distinct movie/episode title Radarr/Sonarr ever searches for)
+// would otherwise accumulate here for the process lifetime. Sweep everything
+// past its TTL whenever we touch the cache, so it stays bounded to what's
+// actually been searched in the last CACHE_TTL_MS.
+function evictExpiredCacheEntries() {
+    const now = Date.now()
+    for (const [key, entry] of searchCache) {
+        if (now - entry.timestamp.getTime() >= CACHE_TTL_MS) {
+            searchCache.delete(key)
+        }
+    }
+}
+
 export async function searchAll(q: string) {
     const sanitizedQuery = sanitizeQuery(q)
 
+    evictExpiredCacheEntries()
+
     const cache = searchCache.get(sanitizedQuery)
-    if (cache && (Date.now() - cache.timestamp.getTime()) < 1000 * 60 * 5) { // 5 minute cache
+    if (cache && (Date.now() - cache.timestamp.getTime()) < CACHE_TTL_MS) {
         console.log(`Cache hit for query "${sanitizedQuery}"`)
         return cache.data
     }
@@ -41,7 +60,7 @@ export async function searchAll(q: string) {
 
     return await searchMutex.runExclusive(async () => {
         const cache = searchCache.get(sanitizedQuery)
-        if (cache && (Date.now() - cache.timestamp.getTime()) < 1000 * 60 * 5) { // 5 minute cache
+        if (cache && (Date.now() - cache.timestamp.getTime()) < CACHE_TTL_MS) {
             console.log(`Cache hit for query "${sanitizedQuery}"`)
             return cache.data
         }
