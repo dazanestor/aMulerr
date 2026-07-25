@@ -643,7 +643,13 @@ class AmuleClient {
 
     if (DEBUG) console.log("[DEBUG] Received response:", response);
 
-    return response.opcode == 6;
+    // NOTE: unlike every other command in this file, success here is checked against
+    // EC_OP_STRINGS rather than _isSuccess()/EC_OP_NOOP. This method isn't called
+    // anywhere in the app (addEd2kLink is used instead for the actual add flow), so
+    // it's never been exercised against a live server to confirm which is right —
+    // named the opcode instead of leaving a bare magic number, but left the check
+    // as-is rather than guessing it should match _isSuccess().
+    return response.opcode == EC_OPCODES.EC_OP_STRINGS;
   }
 
   /**
