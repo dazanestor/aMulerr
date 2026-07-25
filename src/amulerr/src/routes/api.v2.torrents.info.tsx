@@ -66,9 +66,17 @@ export const Route = createFileRoute('/api/v2/torrents/info')({
             downloaded: f.fileSizeDownloaded,
             progress: Math.min(99.99, parseFloat(f.progress ?? '0')) / 100,
             dlspeed: f.speed,
+            // Radarr/Sonarr's QBittorrentTorrent.Eta is a BigInteger (chosen
+            // specifically to hold real qBittorrent's occasional huge
+            // sentinel values, not to hold fractions) — a JSON number with a
+            // decimal point deserializes as a Float token, which
+            // Newtonsoft's BigIntegerConverter doesn't accept, so this must
+            // stay a whole number.
             eta:
               f.speed && f.speed > 0
-                ? (f.fileSize - (f.fileSizeDownloaded ?? 0)) / f.speed
+                ? Math.floor(
+                    (f.fileSize - (f.fileSizeDownloaded ?? 0)) / f.speed,
+                  )
                 : 8640000,
             state: statusToQbittorrentState(f),
             content_path: `${f.category_obj?.path}/${f.fileName}`,
