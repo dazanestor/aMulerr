@@ -21,23 +21,23 @@ export const emptyResponse = (offset: string) => `
 export const itemsResponse = (
   searchResults: Awaited<ReturnType<typeof searchAll>>,
   categories: number[],
-) => `
-  <rss version="2.0" xmlns:torznab="http://torznab.com/schemas/2015/feed">
-    <channel>
-      <torznab:response offset="0" total="${searchResults.length}"/>
-      ${searchResults
-        .map((item) => {
-          const magnetLink = toMagnetLink(
-            item.fileHash,
-            item.fileName,
-            item.fileSize,
-          )
+) => {
+  // Build items first so `total` reflects what's actually rendered — items whose
+  // hash fails validation (toMagnetLink returns null) are dropped and must not be
+  // counted, or Torznab consumers see a `total` higher than the <item> count.
+  const items = searchResults
+    .map((item) => {
+      const magnetLink = toMagnetLink(
+        item.fileHash,
+        item.fileName,
+        item.fileSize,
+      )
 
-          if (!magnetLink) {
-            return null
-          }
+      if (!magnetLink) {
+        return null
+      }
 
-          return `
+      return `
           <item>
             <title>${encode(item.fileName)}</title>
             <guid>${item.fileHash}-${encode(item.fileName)}</guid>
@@ -53,12 +53,18 @@ export const itemsResponse = (
             <torznab:attr name="minimumseedtime" value="0" />
             <torznab:attr name="tag" value="freeleech" />
           </item>`
-        })
-        .filter(skipFalsy)
-        .join('')}
+    })
+    .filter(skipFalsy)
+
+  return `
+  <rss version="2.0" xmlns:torznab="http://torznab.com/schemas/2015/feed">
+    <channel>
+      <torznab:response offset="0" total="${items.length}"/>
+      ${items.join('')}
     </channel>
   </rss>
   `
+}
 
 export function group<T>(
   arr: T[],
