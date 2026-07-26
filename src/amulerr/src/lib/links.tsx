@@ -46,25 +46,3 @@ export function fromMagnetLink(magnetLink: string) {
 export function toEd2kLink(hash: string, name: string, size: number) {
   return `ed2k://|file|${name}|${size}|${hash}|/`
 }
-
-export function fromEd2kLink(ed2kLink: string) {
-  const extractEd2kLinkInfo =
-    /ed2k:\/\/\|file\|(?<name>[^|]+)\|(?<size>[^|]+)\|(?<hash>[^|]+)\|/
-
-  const { hash, name, size } = extractEd2kLinkInfo.exec(ed2kLink)?.groups ?? {}
-
-  if (!hash || !name || !size) {
-    throw new Error('Invalid ed2k link')
-  }
-
-  const ed2kHash = parseEd2kHash(hash)
-  if (ed2kHash == null) {
-    throw new Error('Invalid ed2k hash')
-  }
-
-  return {
-    hash: ed2kHash,
-    name: decodeURIComponent(name),
-    size: parseInt(size),
-  }
-}

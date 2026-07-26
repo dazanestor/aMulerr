@@ -76,21 +76,6 @@ declare module '#/amule-ec-node/AmuleClient.mjs' {
     categoryId: number | null
   }
 
-  export interface ConnectionPreferences {
-    slotAllocation?: number
-    maxDownload?: number
-    maxUpload?: number
-    dlCapacity?: number
-    ulCapacity?: number
-    tcpPort?: number
-    udpPort?: number
-    udpDisabled?: boolean
-    maxConnections?: number
-    autoConnect?: boolean
-    ed2kEnabled?: boolean
-    kadEnabled?: boolean
-  }
-
   export default class AmuleClient {
     constructor(
       host: string,
@@ -102,18 +87,7 @@ declare module '#/amule-ec-node/AmuleClient.mjs' {
     connect(): Promise<void>
     close(): void
 
-    getConnectionState(): Promise<AmuleTagTree>
     getStats(): Promise<AmuleTagTree>
-    getStatsTree(): Promise<AmuleTagTree>
-    getServerInfo(): Promise<AmuleTagTree>
-    getLog(): Promise<AmuleTagTree>
-    getDebugLog(): Promise<AmuleTagTree>
-    getServerList(): Promise<AmuleTagTree>
-    getUploadingQueue(): Promise<AmuleTagTree>
-
-    removeServer(ip: string, port: number): Promise<boolean>
-    connectServer(ip: string, port: number): Promise<boolean>
-    disconnectServer(ip: string, port: number): Promise<boolean>
 
     getSharedFiles(): Promise<SharedFile[]>
     clearCompleted(
@@ -154,11 +128,6 @@ declare module '#/amule-ec-node/AmuleClient.mjs' {
     deleteCategory(categoryId: number): Promise<boolean>
     setFileCategory(fileHash: string, categoryId: number): Promise<boolean>
     setDownloadPriority(fileHash: string, priority: number): Promise<boolean>
-
-    getConnectionPreferences(): Promise<ConnectionPreferences>
-    setConnectionPreferences(
-      prefs: Partial<ConnectionPreferences>,
-    ): Promise<boolean>
 
     buildTagTree(tags: unknown[]): AmuleTagTree
     parseCategories(tags: unknown[]): Category[]
