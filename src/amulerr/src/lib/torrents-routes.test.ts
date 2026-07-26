@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import fsSync from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import { toMagnetLink } from '#/lib/links'
 
 // These route handlers all go through useAmule() to reach the real
 // AmuleClient/EC connection. Replacing it with a fake client lets us assert
@@ -24,6 +25,7 @@ const amuleMock = {
   deleteCategory: vi.fn(),
   getIncomingDir: vi.fn(),
   refreshSharedFiles: vi.fn(),
+  addEd2kLink: vi.fn(),
 }
 
 vi.mock('#/amule', () => ({
@@ -257,6 +259,100 @@ describe('torrents/createCategory', () => {
   })
 })
 
+describe('torrents/setCategory', () => {
+  // Regression test: category id 0 (e.g. the very first category ever
+  // created) is a real, valid id — a falsy check on it must not be
+  // mistaken for "category not found", or setCategory would be permanently
+  // broken for that category.
+  it('accepts a category whose id is 0', async () => {
+    amuleMock.getCategories.mockResolvedValue([
+      {
+        id: 0,
+        title: 'radarr-amule',
+        path: '/downloads/incoming/radarr-amule',
+        comment: 'amulerr',
+        color: 0,
+        priority: 0,
+      },
+    ])
+    amuleMock.setFileCategory.mockResolvedValue(true)
+
+    const { Route } = await import('#/routes/api.v2.torrents.setCategory')
+    const response = await getHandler(
+      Route,
+      'POST',
+    )({ request: postForm({ hashes: 'abc', category: 'radarr-amule' }) })
+
+    expect(response.status).toBe(200)
+    expect(amuleMock.setFileCategory).toHaveBeenCalledWith('ABC', 0)
+  })
+
+  it('fails when the category is genuinely not found', async () => {
+    amuleMock.getCategories.mockResolvedValue([])
+
+    const { Route } = await import('#/routes/api.v2.torrents.setCategory')
+    await expect(
+      getHandler(
+        Route,
+        'POST',
+      )({ request: postForm({ hashes: 'abc', category: 'missing' }) }),
+    ).rejects.toThrow(/not found/i)
+
+    expect(amuleMock.setFileCategory).not.toHaveBeenCalled()
+  })
+})
+
+describe('torrents/add', () => {
+  const magnetLink = toMagnetLink(
+    '00000000000000000000000000000001',
+    'movie.mkv',
+    1000,
+  )!
+
+  // Same regression as setCategory: category id 0 must be accepted, not
+  // treated as "not found".
+  it('accepts a category whose id is 0', async () => {
+    amuleMock.getCategories.mockResolvedValue([
+      {
+        id: 0,
+        title: 'radarr-amule',
+        path: '/downloads/incoming/radarr-amule',
+        comment: 'amulerr',
+        color: 0,
+        priority: 0,
+      },
+    ])
+    amuleMock.addEd2kLink.mockResolvedValue(true)
+
+    const { Route } = await import('#/routes/api.v2.torrents.add')
+    const response = await getHandler(
+      Route,
+      'POST',
+    )({
+      request: postForm({ urls: magnetLink, category: 'radarr-amule' }),
+    })
+
+    expect(response.status).toBe(200)
+    expect(amuleMock.addEd2kLink).toHaveBeenCalledWith(expect.any(String), 0)
+  })
+
+  it('fails when the category is genuinely not found', async () => {
+    amuleMock.getCategories.mockResolvedValue([])
+
+    const { Route } = await import('#/routes/api.v2.torrents.add')
+    await expect(
+      getHandler(
+        Route,
+        'POST',
+      )({
+        request: postForm({ urls: magnetLink, category: 'missing' }),
+      }),
+    ).rejects.toThrow(/not found/i)
+
+    expect(amuleMock.addEd2kLink).not.toHaveBeenCalled()
+  })
+})
+
 describe('torrents/delete', () => {
   function withTempFile() {
     const dir = fsSync.mkdtempSync(path.join(os.tmpdir(), 'amulerr-test-'))
@@ -321,6 +417,27 @@ describe('torrents/delete', () => {
     await getHandler(Route, 'POST')({ request: postForm({ hashes: 'abc' }) })
 
     expect(amuleMock.clearCompleted).toHaveBeenCalledWith([5])
+
+    fsSync.rmSync(dir, { recursive: true, force: true })
+  })
+
+  // Regression test: an ecid of 0 is a valid identifier (see
+  // AmuleClient.mjs's getSharedFiles) — a falsy filter on it would silently
+  // drop that file from clearCompleted, leaving a stale "known" entry in
+  // aMule pointing at data that was just physically deleted.
+  it('still passes an ecid of 0 through to clearCompleted', async () => {
+    const { dir, fileName } = withTempFile()
+    amuleMock.getSharedFiles.mockResolvedValue([
+      { fileHash: 'ABC', ecid: 0, path: dir, fileName },
+    ])
+    amuleMock.clearCompleted.mockResolvedValue({ opcode: 1, cleared: [0] })
+    amuleMock.cancelDownload.mockResolvedValue(true)
+    amuleMock.refreshSharedFiles.mockResolvedValue(true)
+
+    const { Route } = await import('#/routes/api.v2.torrents.delete')
+    await getHandler(Route, 'POST')({ request: postForm({ hashes: 'abc' }) })
+
+    expect(amuleMock.clearCompleted).toHaveBeenCalledWith([0])
 
     fsSync.rmSync(dir, { recursive: true, force: true })
   })

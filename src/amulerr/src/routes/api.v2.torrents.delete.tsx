@@ -28,7 +28,13 @@ export const Route = createFileRoute('/api/v2/torrents/delete')({
               (f) => f.fileHash && hashes.includes(f.fileHash.toUpperCase()),
             )
 
-            const ecids = matches.map((f) => f.ecid).filter(skipFalsy)
+            // ?? not skipFalsy: an ecid of 0 is a valid identifier (see
+            // AmuleClient.mjs's getSharedFiles/getUpdate) and must not be
+            // dropped, or that file's stale "known" entry never gets
+            // cleared via EC_OP_CLEAR_COMPLETED.
+            const ecids = matches
+              .map((f) => f.ecid)
+              .filter((ecid): ecid is number => ecid !== undefined)
             await amule.clearCompleted(ecids)
 
             for (const hash of hashes) {

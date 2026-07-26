@@ -29,8 +29,11 @@ export const Route = createFileRoute('/api/v2/torrents/add')({
 
         await useAmule(async (amule) => {
           const categories = await amule.getCategories()
+          // Category id 0 is a valid, real category (e.g. the first one ever
+          // created) — a falsy check here would wrongly treat it as "not
+          // found" on every single grab into that category.
           const categoryId = categories.find((c) => c.title === category)?.id
-          if (!categoryId) {
+          if (categoryId === undefined) {
             throw new Error(`Category ${category} not found`)
           }
 
