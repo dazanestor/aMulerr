@@ -9,7 +9,6 @@ import {
   EC_SEARCH_TYPE,
   EC_VALUE_TYPE,
   EC_PREFS,
-  EC_DETAIL_LEVEL,
 } from './ECDefs.mjs'
 
 const DEBUG = false
@@ -44,11 +43,10 @@ class AmuleClient {
     this.session = new ECProtocol(host, port, password, options)
 
     // Clear incremental state on reconnection — aMule resets its
-    // server-side diff state, so our XOR buffers and update cache
-    // would produce corrupted data if not cleared.
+    // server-side diff state, so our XOR buffers would produce corrupted
+    // data (wrong partStatus/gapStatus/reqStatus) if not cleared.
     this.session.onReconnected = () => {
       this._ecBufferState = null
-      this._updateState = null
       console.log('[AmuleClient] Cleared incremental state after reconnection')
     }
   }
@@ -226,8 +224,7 @@ class AmuleClient {
   }
 
   /**
-   * Get the full list of shared files (non-incremental).
-   * Unlike getUpdate(), this always returns the complete list.
+   * Get the full list of shared files.
    * @returns {Promise<{fileName: string, fileHash: string, fileSize: number, transferred: number, transferredTotal: number, reqCount: number, reqCountTotal: number, acceptedCount: number, acceptedCountTotal: number, priority: number, path: string, completeSources: number, onQueue: number, ed2kLink: string, raw: Object}[]>} Parsed shared file objects
    */
   async getSharedFiles() {
@@ -256,24 +253,11 @@ class AmuleClient {
    * Clear completed downloads from aMule's download list.
    * Sends EC_OP_CLEAR_COMPLETED with EC_TAG_ECID children for each ecid to clear.
    *
-   * @param {number[]} [ecids] - Specific ecids to clear. If omitted, clears all
-   *   downloads at 100% from the internal _updateState cache.
+   * @param {number[]} ecids - Ecids to clear.
    * @returns {Promise<{ opcode: number, cleared: number[] }>} Response opcode and list of ecids sent.
    */
   async clearCompleted(ecids) {
     if (DEBUG) console.log('[DEBUG] Clearing completed downloads...')
-
-    // If no ecids specified, find all completed downloads from cache
-    if (!ecids) {
-      ecids = []
-      if (this._updateState) {
-        for (const [ecid, dl] of this._updateState.downloads) {
-          if (parseFloat(dl.progress) >= 100) {
-            ecids.push(ecid)
-          }
-        }
-      }
-    }
 
     if (ecids.length === 0) {
       if (DEBUG) console.log('[DEBUG] No completed downloads to clear')
@@ -319,8 +303,7 @@ class AmuleClient {
   }
 
   /**
-   * Get the full download queue (non-incremental).
-   * Unlike getUpdate(), this always returns the complete list.
+   * Get the full download queue.
    * @returns {Promise<Object[]>} Array of download objects with parsed fields
    */
   async getDownloadQueue() {
@@ -346,209 +329,6 @@ class AmuleClient {
       fields.raw = this.buildTagTree(tag.children)
       return fields
     })
-  }
-
-  /**
-   * Request an incremental update from aMule containing files, clients, and servers.
-   *
-   * IMPORTANT: EC_OP_GET_UPDATE with EC_DETAIL_INC_UPDATE is **stateful and incremental**.
-   * The first call returns full state for all objects. Subsequent calls return only
-   * fields that changed since the last call. This method maintains an internal cache
-   * (_updateState) and merges incremental updates automatically.
-   *
-   * Returns { downloads, sharedFiles, clients } where:
-   * - downloads: array of download objects (EC_TAG_PARTFILE) with all fields
-   * - sharedFiles: array of shared file objects (EC_TAG_KNOWNFILE) with all fields
-   * - clients: array of client/peer objects (EC_TAG_CLIENT) with all fields
-   */
-  async getUpdate() {
-    if (DEBUG) console.log('[DEBUG] Requesting incremental update')
-
-    const reqTags = [
-      this.session.createTag(
-        EC_TAGS.EC_TAG_DETAIL_LEVEL,
-        EC_TAG_TYPES.EC_TAGTYPE_UINT8,
-        EC_DETAIL_LEVEL.EC_DETAIL_INC_UPDATE,
-      ),
-    ]
-
-    const response = await this.session.sendPacket(
-      EC_OPCODES.EC_OP_GET_UPDATE,
-      reqTags,
-    )
-
-    if (DEBUG)
-      console.log(
-        '[DEBUG] Received update response, tags:',
-        response.tags?.length,
-      )
-
-    // Initialize state cache on first call
-    if (!this._updateState) {
-      this._updateState = {
-        downloads: new Map(), // ecid → download object
-        sharedFiles: new Map(), // ecid → shared file object
-        clients: new Map(), // ecid → client object
-      }
-    }
-
-    // Parse and merge downloads (EC_TAG_PARTFILE tags at root level)
-    // Collect ecids seen in this response for set-based reconciliation
-    const seenDownloads = new Set()
-    for (const tag of response.tags) {
-      if (tag.tagId !== EC_TAGS.EC_TAG_PARTFILE) continue
-      // ?? not || : an ecid of 0 is a valid identifier and must not be
-      // replaced by the raw Buffer fallback (same falsy-zero class as categoryId).
-      const ecid = tag.humanValue ?? tag.value
-      seenDownloads.add(ecid)
-      const existing = this._updateState.downloads.get(ecid) || { ecid }
-      const updates = this._parseDownloadFields(tag)
-      // RLE-decode + XOR-reconstruct buffer fields (partStatus, gapStatus, reqStatus)
-      this._reconstructBufferFields(ecid, updates)
-      // Merge raw tag tree incrementally (preserves fields from prior full update)
-      updates.raw = this.deepMergeRaw(
-        existing.raw || {},
-        this.buildTagTree(tag.children),
-      )
-      const merged = { ...existing, ...updates }
-      // Recalculate progress after merge (incremental may update only one of the two size fields)
-      if (merged.fileSize > 0 && merged.fileSizeDownloaded !== undefined) {
-        merged.progress = (
-          (merged.fileSizeDownloaded / merged.fileSize) *
-          100
-        ).toFixed(2)
-      }
-      this._updateState.downloads.set(ecid, merged)
-    }
-    // Remove downloads no longer present in the response (completed/cancelled)
-    for (const ecid of this._updateState.downloads.keys()) {
-      if (!seenDownloads.has(ecid)) {
-        if (DEBUG) console.log(`[DEBUG] Removing stale download ecid=${ecid}`)
-        this._updateState.downloads.delete(ecid)
-        if (this._ecBufferState) this._ecBufferState.delete(ecid)
-      }
-    }
-
-    // Track completed downloads for clearCompleted.
-    // aMule keeps completed downloads in the PARTFILE list until cleared via
-    // EC_OP_CLEAR_COMPLETED. Clearing triggers RenewECID(), which causes the
-    // next getUpdate() to return the file as a new KNOWNFILE (shared file).
-    // We wait for status 9 (PS_COMPLETE) before clearing, since status 8
-    // (PS_COMPLETING) means aMule is still hashing/moving the file.
-    if (!this._completedHashes) this._completedHashes = new Set()
-    if (!this._pendingClear) this._pendingClear = new Map() // hash → ecid
-
-    for (const dl of this._updateState.downloads.values()) {
-      if (parseFloat(dl.progress) >= 100 && dl.fileHash) {
-        if (!this._completedHashes.has(dl.fileHash)) {
-          this._completedHashes.add(dl.fileHash)
-          if (DEBUG)
-            console.log(
-              `[DEBUG] Download completed: hash=${dl.fileHash}, name=${dl.fileName}, status=${dl.status}`,
-            )
-        }
-        // Queue for clearing (will be sent when status reaches PS_COMPLETE)
-        if (!this._pendingClear.has(dl.fileHash)) {
-          this._pendingClear.set(dl.fileHash, dl.ecid)
-        }
-      }
-    }
-
-    // Parse and merge shared files (EC_TAG_KNOWNFILE tags at root level)
-    const seenSharedFiles = new Set()
-    for (const tag of response.tags) {
-      if (tag.tagId !== EC_TAGS.EC_TAG_KNOWNFILE) continue
-      // ?? not || : same falsy-zero-ecid reasoning as the downloads loop above.
-      const ecid = tag.humanValue ?? tag.value
-      seenSharedFiles.add(ecid)
-      const existing = this._updateState.sharedFiles.get(ecid) || { ecid }
-      const updates = this._parseSharedFileFields(tag)
-      updates.raw = this.deepMergeRaw(
-        existing.raw || {},
-        this.buildTagTree(tag.children),
-      )
-      this._updateState.sharedFiles.set(ecid, { ...existing, ...updates })
-    }
-    // Remove shared files no longer present (unshared)
-    for (const ecid of this._updateState.sharedFiles.keys()) {
-      if (!seenSharedFiles.has(ecid)) {
-        if (DEBUG)
-          console.log(`[DEBUG] Removing stale shared file ecid=${ecid}`)
-        this._updateState.sharedFiles.delete(ecid)
-      }
-    }
-
-    // Clear completed downloads that have reached PS_COMPLETE (status 9).
-    // This removes them from the download list and triggers RenewECID(),
-    // causing the next getUpdate() to return them as new KNOWNFILEs.
-    if (this._pendingClear.size > 0) {
-      const ecidsToClear = []
-      const hashesToRemove = []
-
-      for (const [hash, ecid] of this._pendingClear) {
-        const dl = [...this._updateState.downloads.values()].find(
-          (d) => d.fileHash === hash,
-        )
-        if (!dl) {
-          // Download already gone (cleared externally or by aMule)
-          hashesToRemove.push(hash)
-        } else if (dl.status === 9) {
-          // PS_COMPLETE — ready to clear
-          ecidsToClear.push(ecid)
-          hashesToRemove.push(hash)
-          if (DEBUG)
-            console.log(
-              `[DEBUG] Clearing completed download: hash=${hash}, ecid=${ecid}`,
-            )
-        }
-        // status 8 (PS_COMPLETING) — keep waiting
-      }
-
-      for (const hash of hashesToRemove) {
-        this._pendingClear.delete(hash)
-      }
-
-      if (ecidsToClear.length > 0) {
-        try {
-          await this.clearCompleted(ecidsToClear)
-        } catch (err) {
-          if (DEBUG)
-            console.log(`[DEBUG] Failed to clear completed:`, err.message)
-        }
-      }
-    }
-
-    // Parse and merge clients from EC_TAG_CLIENT container
-    const clientContainer = response.tags.find(
-      (tag) => tag.tagId === EC_TAGS.EC_TAG_CLIENT,
-    )
-    if (clientContainer && clientContainer.children) {
-      const seenClients = new Set()
-      const clientTags = clientContainer.children.filter(
-        (c) => c.tagId === EC_TAGS.EC_TAG_CLIENT,
-      )
-      for (const clientTag of clientTags) {
-        // ?? not || : same falsy-zero-ecid reasoning as the downloads loop above.
-        const ecid = clientTag.humanValue ?? clientTag.value
-        seenClients.add(ecid)
-        const existing = this._updateState.clients.get(ecid) || { ecid }
-        const updates = this._parseClientFields(clientTag)
-        this._updateState.clients.set(ecid, { ...existing, ...updates })
-      }
-      // Remove disconnected clients no longer present
-      for (const ecid of this._updateState.clients.keys()) {
-        if (!seenClients.has(ecid)) {
-          if (DEBUG) console.log(`[DEBUG] Removing stale client ecid=${ecid}`)
-          this._updateState.clients.delete(ecid)
-        }
-      }
-    }
-
-    return {
-      downloads: Array.from(this._updateState.downloads.values()),
-      sharedFiles: Array.from(this._updateState.sharedFiles.values()),
-      clients: Array.from(this._updateState.clients.values()),
-    }
   }
 
   /**
@@ -700,58 +480,6 @@ class AmuleClient {
     }
 
     return this.getSearchResults?.() ?? null
-  }
-
-  /**
-   * Download a file from search results.
-   * @param {string} fileHash - MD4 hash of the file to download
-   * @param {number} [categoryId=0] - Category ID to assign (0 = default)
-   * @returns {Promise<boolean>} True if the download was started successfully
-   */
-  async downloadSearchResult(fileHash, categoryId = 0) {
-    if (DEBUG)
-      console.log(
-        '[DEBUG] Requesting download ',
-        fileHash,
-        ' from search result with category',
-        categoryId,
-        '...',
-      )
-
-    const children =
-      categoryId !== 0
-        ? [
-            {
-              tagId: EC_TAGS.EC_TAG_PARTFILE_CAT,
-              tagType: EC_TAG_TYPES.EC_TAGTYPE_UINT32,
-              value: categoryId,
-            },
-          ]
-        : []
-
-    const reqTags = [
-      this.session.createTag(
-        EC_TAGS.EC_TAG_PARTFILE,
-        EC_TAG_TYPES.EC_TAGTYPE_HASH16,
-        fileHash,
-        children,
-      ),
-    ]
-
-    const response = await this.session.sendPacket(
-      EC_OPCODES.EC_OP_DOWNLOAD_SEARCH_RESULT,
-      reqTags,
-    )
-
-    if (DEBUG) console.log('[DEBUG] Received response:', response)
-
-    // NOTE: unlike every other command in this file, success here is checked against
-    // EC_OP_STRINGS rather than _isSuccess()/EC_OP_NOOP. This method isn't called
-    // anywhere in the app (addEd2kLink is used instead for the actual add flow), so
-    // it's never been exercised against a live server to confirm which is right —
-    // named the opcode instead of leaving a bare magic number, but left the check
-    // as-is rather than guessing it should match _isSuccess().
-    return response.opcode == EC_OPCODES.EC_OP_STRINGS
   }
 
   /**
@@ -1138,110 +866,6 @@ class AmuleClient {
   }
 
   /**
-   * Rename a file (download or shared).
-   * Searches the download queue first, then known (shared) files.
-   * @param {string} fileHash - MD4 hash of the file to rename
-   * @param {string} newName - New filename
-   * @returns {Promise<{ success: boolean, error?: string }>} Result with optional error message
-   */
-  async renameFile(fileHash, newName) {
-    if (DEBUG) console.log('[DEBUG] Renaming file:', fileHash, '->', newName)
-
-    // As per aMule source (ExternalConn.cpp): EC_OP_RENAME_FILE expects
-    // EC_TAG_KNOWNFILE (hash) + EC_TAG_PARTFILE_NAME (new name) as top-level tags.
-    // It searches download queue first, then known files.
-    const reqTags = [
-      this.session.createTag(
-        EC_TAGS.EC_TAG_KNOWNFILE,
-        EC_TAG_TYPES.EC_TAGTYPE_HASH16,
-        fileHash,
-      ),
-      this.session.createTag(
-        EC_TAGS.EC_TAG_PARTFILE_NAME,
-        EC_TAG_TYPES.EC_TAGTYPE_STRING,
-        newName,
-      ),
-    ]
-
-    const response = await this.session.sendPacket(
-      EC_OPCODES.EC_OP_RENAME_FILE,
-      reqTags,
-    )
-
-    if (DEBUG) console.log('[DEBUG] Received response:', response)
-
-    if (response.opcode === EC_OPCODES.EC_OP_FAILED) {
-      const errorMsg = response.tags?.find(
-        (t) => t.tagId === EC_TAGS.EC_TAG_STRING,
-      )?.humanValue
-      return { success: false, error: errorMsg || 'Rename failed' }
-    }
-
-    return { success: this._isSuccess(response) }
-  }
-
-  /**
-   * Set the comment and rating on a shared file.
-   *
-   * aMule's EC handler always writes both fields together — missing tags are
-   * treated as "clear" (empty comment / zero rating). To update only one field
-   * while preserving the other, read the current values via getSharedFiles()
-   * first and re-supply the unchanged one here.
-   *
-   * Rating scale: 0 = Not rated, 1 = Fake, 2 = Poor, 3 = Fair, 4 = Good, 5 = Excellent
-   *
-   * @param {string} fileHash - MD4 hash of the shared file
-   * @param {string} comment - Comment text (empty string clears)
-   * @param {number} rating - Rating 0–5 (0 = not rated)
-   * @returns {Promise<boolean>} True if the command was accepted
-   */
-  async setFileRatingComment(fileHash, comment, rating) {
-    if (typeof comment !== 'string') {
-      throw new TypeError('setFileRatingComment: comment must be a string')
-    }
-    if (!Number.isInteger(rating) || rating < 0 || rating > 5) {
-      throw new RangeError(
-        'setFileRatingComment: rating must be an integer between 0 and 5',
-      )
-    }
-
-    if (DEBUG)
-      console.log(
-        '[DEBUG] Setting comment/rating for file:',
-        fileHash,
-        comment,
-        rating,
-      )
-
-    const reqTags = [
-      this.session.createTag(
-        EC_TAGS.EC_TAG_KNOWNFILE,
-        EC_TAG_TYPES.EC_TAGTYPE_HASH16,
-        fileHash,
-      ),
-      this.session.createTag(
-        EC_TAGS.EC_TAG_KNOWNFILE_COMMENT,
-        EC_TAG_TYPES.EC_TAGTYPE_STRING,
-        comment,
-      ),
-      this.session.createTag(
-        EC_TAGS.EC_TAG_KNOWNFILE_RATING,
-        EC_TAG_TYPES.EC_TAGTYPE_UINT8,
-        rating,
-      ),
-    ]
-
-    const response = await this.session.sendPacket(
-      EC_OPCODES.EC_OP_SHARED_FILE_SET_COMMENT,
-      reqTags,
-    )
-
-    if (DEBUG) console.log('[DEBUG] setFileRatingComment response:', response)
-
-    return this._isSuccess(response)
-  }
-
-  /**
    * Parse fields from an EC_TAG_PARTFILE tag (for incremental merging).
    * Only returns fields actually present in the response.
    * @param {Object} tag - Raw EC tag
@@ -1585,133 +1209,6 @@ class AmuleClient {
   }
 
   /**
-   * Parse fields from an EC_TAG_CLIENT tag (for incremental merging).
-   * Only returns fields actually present in the response.
-   * @param {Object} clientTag - Raw EC tag
-   * @returns {Object} Parsed client/peer fields
-   * @private
-   */
-  _parseClientFields(clientTag) {
-    const result = {}
-    if (!clientTag.children) return result
-
-    for (const sub of clientTag.children) {
-      const val = sub.humanValue
-      switch (sub.tagId) {
-        case EC_TAGS.EC_TAG_CLIENT_NAME:
-          result.userName = val || ''
-          break
-        case EC_TAGS.EC_TAG_CLIENT_HASH:
-          result.userHash = val
-          break
-        case EC_TAGS.EC_TAG_CLIENT_REQUEST_FILE:
-          result.requestFileEcid = val
-          break
-        case EC_TAGS.EC_TAG_CLIENT_UPLOAD_FILE:
-          result.uploadFileEcid = val
-          break
-        case EC_TAGS.EC_TAG_CLIENT_SOFTWARE:
-          result.software = val
-          break
-        case EC_TAGS.EC_TAG_CLIENT_SOFT_VER_STR:
-          result.softwareVersion = val
-          break
-        case EC_TAGS.EC_TAG_CLIENT_DOWNLOAD_STATE:
-          result.downloadState = val
-          break
-        case EC_TAGS.EC_TAG_CLIENT_UPLOAD_STATE:
-          result.uploadState = val
-          break
-        // DOWN_SPEED is returned as float in KB/s, UP_SPEED as integer in B/s
-        // Normalize both to bytes/sec for consistent handling
-        case EC_TAGS.EC_TAG_CLIENT_DOWN_SPEED:
-          result.downSpeed = ((val || 0) * 1024) | 0
-          break
-        case EC_TAGS.EC_TAG_CLIENT_UP_SPEED:
-          result.upSpeed = val || 0
-          break
-        case EC_TAGS.EC_TAG_CLIENT_DOWNLOAD_TOTAL:
-          result.downloadTotal = val || 0
-          break
-        case EC_TAGS.EC_TAG_CLIENT_UPLOAD_TOTAL:
-          result.uploadTotal = val || 0
-          break
-        case EC_TAGS.EC_TAG_CLIENT_USER_IP:
-          // Convert 32-bit little-endian integer to dotted notation
-          if (typeof val === 'number' && val > 0) {
-            result.ip = `${val & 0xff}.${(val >>> 8) & 0xff}.${(val >>> 16) & 0xff}.${(val >>> 24) & 0xff}`
-          } else {
-            result.ip = val
-          }
-          break
-        case EC_TAGS.EC_TAG_CLIENT_USER_PORT:
-          result.port = val
-          break
-        case EC_TAGS.EC_TAG_CLIENT_FROM:
-          result.sourceFrom = val
-          break
-        case EC_TAGS.EC_TAG_CLIENT_REMOTE_QUEUE_RANK:
-          result.remoteQueueRank = val
-          break
-        case EC_TAGS.EC_TAG_CLIENT_REMOTE_FILENAME:
-          result.remoteFilename = val
-          break
-        case EC_TAGS.EC_TAG_CLIENT_SCORE:
-          result.score = val
-          break
-        case EC_TAGS.EC_TAG_CLIENT_IDENT_STATE:
-          result.identState = val
-          break
-        case EC_TAGS.EC_TAG_CLIENT_OBFUSCATION_STATUS:
-          result.obfuscation = val
-          break
-        case EC_TAGS.EC_TAG_CLIENT_PART_STATUS:
-          result.partStatus = sub.value
-          break
-        case EC_TAGS.EC_TAG_CLIENT_UPLOAD_PART_STATUS:
-          result.uploadPartStatus = sub.value
-          break
-        case EC_TAGS.EC_TAG_CLIENT_AVAILABLE_PARTS:
-          result.availableParts = val
-          break
-        case EC_TAGS.EC_TAG_CLIENT_SERVER_NAME:
-          result.serverName = val
-          break
-        case EC_TAGS.EC_TAG_CLIENT_SERVER_IP:
-          if (typeof val === 'number' && val > 0) {
-            result.serverIP = `${val & 0xff}.${(val >>> 8) & 0xff}.${(val >>> 16) & 0xff}.${(val >>> 24) & 0xff}`
-          } else {
-            result.serverIP = val
-          }
-          break
-        case EC_TAGS.EC_TAG_CLIENT_SERVER_PORT:
-          result.serverPort = val
-          break
-        case EC_TAGS.EC_TAG_CLIENT_MOD_VERSION:
-          result.modVersion = val
-          break
-        case EC_TAGS.EC_TAG_CLIENT_OS_INFO:
-          result.osInfo = val
-          break
-        case EC_TAGS.EC_TAG_CLIENT_KAD_PORT:
-          result.kadPort = val
-          break
-        case EC_TAGS.EC_TAG_PARTFILE_NAME:
-          result.transferFileName = fixMojibake(val)
-          break
-        case EC_TAGS.EC_TAG_PARTFILE_SIZE_XFER:
-          result.transferredSession = val
-          break
-        case EC_TAGS.EC_TAG_CLIENT_UPLOAD_SESSION:
-          result.uploadSession = val
-          break
-      }
-    }
-
-    return result
-  }
-
-  /**
    * Parse category tags from an EC_OP_GET_PREFERENCES response.
    * @param {Object[]} tags - Raw response tags
    * @returns {Object[]} Array of category objects with { id, title, path, comment, color, priority }
@@ -1844,89 +1341,6 @@ class AmuleClient {
       default:
         return value
     }
-  }
-
-  /**
-   * Deep merge for raw tag trees from incremental EC updates.
-   *
-   * aMule's EC protocol sends only changed fields in incremental updates
-   * (EC_DETAIL_INC_UPDATE). For nested structures like EC_TAG_PARTFILE_SOURCE_NAMES,
-   * the server uses an ID-based diff: each entry is identified by a numeric ID
-   * (stored as _value by buildTagTree). Count-only updates omit the filename string,
-   * expecting the client to preserve it from the initial full response.
-   *
-   * This merge handles:
-   * - Objects: recursively merged (unchanged fields preserved)
-   * - Arrays of objects with _value (ID-keyed): merged by matching _value,
-   *   entries with count=0 are removals (aMule protocol convention)
-   * - Other arrays / primitives: replaced outright
-   */
-  deepMergeRaw(existing, updates) {
-    const result = { ...existing }
-    for (const key of Object.keys(updates)) {
-      let newVal = updates[key]
-      let oldVal = result[key]
-
-      // Normalize: when one side is an array and the other a single ID-keyed object,
-      // wrap the single object so both sides are arrays (buildTagTree produces a
-      // single object when there's one entry, an array when there are multiple).
-      if (
-        oldVal &&
-        newVal &&
-        typeof newVal === 'object' &&
-        typeof oldVal === 'object'
-      ) {
-        const newIsIdObj = !Array.isArray(newVal) && '_value' in newVal
-        const oldIsIdObj = !Array.isArray(oldVal) && '_value' in oldVal
-        if (oldIsIdObj && newIsIdObj) {
-          oldVal = [oldVal]
-          newVal = [newVal]
-        } else if (Array.isArray(oldVal) && newIsIdObj) newVal = [newVal]
-        else if (oldIsIdObj && Array.isArray(newVal)) oldVal = [oldVal]
-      }
-
-      if (
-        Array.isArray(newVal) &&
-        Array.isArray(oldVal) &&
-        newVal.length > 0 &&
-        typeof newVal[0] === 'object' &&
-        newVal[0] !== null &&
-        '_value' in newVal[0]
-      ) {
-        // ID-keyed array merge (matches aMule's CPartFile_Encoder behaviour)
-        const oldMap = new Map()
-        for (const entry of oldVal) {
-          if (entry && entry._value !== undefined)
-            oldMap.set(entry._value, entry)
-        }
-        for (const entry of newVal) {
-          const id = entry._value
-          const prev = oldMap.get(id)
-          if (prev) {
-            oldMap.set(id, this.deepMergeRaw(prev, entry))
-          } else {
-            oldMap.set(id, entry)
-          }
-        }
-        // Filter out entries where the server signalled removal (count = 0)
-        const countKey = key + '_COUNTS'
-        result[key] = [...oldMap.values()].filter(
-          (e) => e[countKey] === undefined || e[countKey] !== 0,
-        )
-      } else if (
-        newVal &&
-        typeof newVal === 'object' &&
-        !Array.isArray(newVal) &&
-        oldVal &&
-        typeof oldVal === 'object' &&
-        !Array.isArray(oldVal)
-      ) {
-        result[key] = this.deepMergeRaw(oldVal, newVal)
-      } else {
-        result[key] = newVal
-      }
-    }
-    return result
   }
 
   /**

@@ -57,14 +57,6 @@ declare module '#/amule-ec-node/AmuleClient.mjs' {
     raw?: AmuleTagTree
   }
 
-  export interface AmuleClientPeer {
-    ecid?: number
-    userName?: string
-    software?: string
-    fileHash?: string
-    [key: string]: unknown
-  }
-
   export interface SearchResults {
     resultsLength: number
     results: DownloadItem[]
@@ -84,11 +76,6 @@ declare module '#/amule-ec-node/AmuleClient.mjs' {
     categoryId: number | null
   }
 
-  export interface RenameResult {
-    success: boolean
-    error?: string
-  }
-
   export interface ConnectionPreferences {
     slotAllocation?: number
     maxDownload?: number
@@ -102,12 +89,6 @@ declare module '#/amule-ec-node/AmuleClient.mjs' {
     autoConnect?: boolean
     ed2kEnabled?: boolean
     kadEnabled?: boolean
-  }
-
-  export interface UpdateSnapshot {
-    downloads: DownloadItem[]
-    sharedFiles: SharedFile[]
-    clients: AmuleClientPeer[]
   }
 
   export default class AmuleClient {
@@ -136,11 +117,10 @@ declare module '#/amule-ec-node/AmuleClient.mjs' {
 
     getSharedFiles(): Promise<SharedFile[]>
     clearCompleted(
-      ecids?: number[],
+      ecids: number[],
     ): Promise<{ opcode: number; cleared: number[] }>
     refreshSharedFiles(): Promise<boolean>
     getDownloadQueue(): Promise<DownloadItem[]>
-    getUpdate(): Promise<UpdateSnapshot>
 
     getSearchResults(): Promise<SearchResults>
     searchAndWaitResults(opts: {
@@ -149,10 +129,6 @@ declare module '#/amule-ec-node/AmuleClient.mjs' {
       timeoutMs?: number
       extension?: string
     }): Promise<SearchResults | null>
-    downloadSearchResult(
-      fileHash: string,
-      categoryId?: number,
-    ): Promise<boolean>
     cancelDownload(fileHash: string): Promise<boolean>
     addEd2kLink(link: string, categoryId?: number): Promise<boolean>
     pauseDownload(fileHash: string): Promise<boolean>
@@ -178,13 +154,6 @@ declare module '#/amule-ec-node/AmuleClient.mjs' {
     deleteCategory(categoryId: number): Promise<boolean>
     setFileCategory(fileHash: string, categoryId: number): Promise<boolean>
     setDownloadPriority(fileHash: string, priority: number): Promise<boolean>
-
-    renameFile(fileHash: string, newName: string): Promise<RenameResult>
-    setFileRatingComment(
-      fileHash: string,
-      comment: string,
-      rating: number,
-    ): Promise<boolean>
 
     getConnectionPreferences(): Promise<ConnectionPreferences>
     setConnectionPreferences(
