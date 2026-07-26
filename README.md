@@ -32,6 +32,7 @@ Cross-checked byte-for-byte against aMule's own source (`ExternalConn.cpp`, `Pre
 - **Unhandled promise rejection on reconnect** — the EC socket's `close`/`error` listeners `await`ed `reconnect()` with nothing to catch a final failure (all retries exhausted); now caught and logged.
 - Added the `infohash` Torznab attribute (Sonarr/Radarr's parser reads it exclusively for dedup/history, no magnet-link fallback for Torznab specifically), and implemented the remaining real qBittorrent endpoints Radarr/Sonarr can call depending on download-client settings: `/torrents/properties`, `/torrents/topPrio` (mapped to aMule's real per-download priority), `/torrents/setForceStart`, `/torrents/setShareLimits`, `/torrents/addTags` (the last two are accept-only no-ops — aMule has no per-torrent seed-ratio/time enforcement or multi-tag concept to honor them with).
 - `lint`, `typecheck`, and `prettier --check` now run in CI alongside the test suite (none of the three were wired up before), and a real test suite now covers all of the above.
+- **`torrents/delete`'s physical-delete fallback needs the `downloads` volume mounted into aMulerr too** — before this, `deleteFiles=true` silently no-op'd (`fs.rm(..., { force: true })` swallows the "path doesn't exist" error) whenever a file had already transitioned out of aMule's active download queue into its known/shared-files list, since aMulerr itself had no filesystem access to the actual data. The normal case (removing a still-active/just-completed download) already worked via `cancelDownload()`, which runs inside the `amule` container where the mount does exist — but this edge case had zero disk access to fall back on. The compose example below now mounts the same `downloads` volume into `amulerr` as `amule` already has.
 
 Published image: **`ghcr.io/dazanestor/amulerr:combined`** (public, auto-built by [this repo's GitHub Action](.github/workflows/docker-build.yml) on every push to `combined-auth-categories`).
 
@@ -61,6 +62,7 @@ services:
     volumes:
       - amulerr_config:/config
       - ./keepalive.mjs:/keepalive.mjs:ro
+      - downloads:/downloads # Required for `deleteFiles=true` to work once a file leaves aMule's active queue
   amule:
     container_name: amule
     image: ngosang/amule:latest
