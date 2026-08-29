@@ -1,6 +1,7 @@
 
 import { useAmule } from '#/amule'
 import { skipFalsy } from '#/lib/array'
+import { clientHashToEd2kHash } from '#/lib/links'
 import { createFileRoute } from '@tanstack/react-router'
 
 export const Route = createFileRoute('/api/v2/torrents/setCategory')({
@@ -14,6 +15,7 @@ export const Route = createFileRoute('/api/v2/torrents/setCategory')({
           ?.toUpperCase()
           ?.split("|")
           .filter(skipFalsy)
+          .map(clientHashToEd2kHash)
         const categoryTitle = formData.get("category")?.toString()
 
         if (categoryTitle && hashes?.length) {

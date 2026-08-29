@@ -1,4 +1,5 @@
 import { useAmule } from '#/amule'
+import { clientHashToEd2kHash } from '#/lib/links'
 import { createFileRoute } from '@tanstack/react-router'
 
 // https://github.com/qbittorrent/qBittorrent/wiki/WebUI-API-(qBittorrent-4.1)#get-torrent-contents
@@ -13,11 +14,13 @@ export const Route = createFileRoute('/api/v2/torrents/files')({
           return Response.json([], { status: 404 })
         }
 
+        const ed2kHash = clientHashToEd2kHash(hash)
+
         const file = await useAmule(async (amule) => {
           const downloads = await amule.getDownloadQueue()
           const shared = await amule.getSharedFiles()
 
-          const download = downloads.find((item) => item.fileHash?.toLowerCase() === hash.toLowerCase())
+          const download = downloads.find((item) => item.fileHash?.toUpperCase() === ed2kHash)
           if (download) {
             return {
               index: 0,
@@ -30,7 +33,7 @@ export const Route = createFileRoute('/api/v2/torrents/files')({
             }
           }
 
-          const sharedFile = shared.find((item) => item.fileHash?.toLowerCase() === hash.toLowerCase())
+          const sharedFile = shared.find((item) => item.fileHash?.toUpperCase() === ed2kHash)
           if (sharedFile) {
             return {
               index: 0,
