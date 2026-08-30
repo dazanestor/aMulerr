@@ -41,8 +41,11 @@ describe('itemsResponse', () => {
     expect(expectedMagnet).not.toBeNull()
     const expectedBtih = expectedMagnet!.split('urn:btih:')[1].split('&')[0]
     expect(xml).toContain(expectedBtih)
+
+    // ...but the infohash attr must be the 40 hex char form the *arr derives
+    // from that magnet after a grab, not the base32 btih.
     expect(xml).toContain(
-      `torznab:attr name="infohash" value="${expectedBtih}"`,
+      `torznab:attr name="infohash" value="${ED2K}00000000"`,
     )
   })
 })

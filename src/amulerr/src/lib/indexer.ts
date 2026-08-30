@@ -2,7 +2,7 @@ import { skipFalsy } from './array'
 import { encode } from 'html-entities'
 import { buildRFC822Date } from './time'
 import type { searchAll } from '#/amule'
-import { toMagnetLink } from './links'
+import { ed2kHashToClientHash, toMagnetLink } from './links'
 
 export const fakeItem = {
   fileName: 'FAKE',
@@ -41,7 +41,13 @@ export const itemsResponse = (
       // exclusively (no fallback to deriving it from the magnet link for
       // Torznab specifically), so without it ReleaseInfo.InfoHash is left
       // empty and any infohash-based dedup/history matching can't work.
-      const infoHash = magnetLink.split('urn:btih:')[1]?.split('&')[0]
+      //
+      // It must be the SAME value the *arr derives from the magnet after a
+      // grab (and that /api/v2/torrents/info reports): the 40 hex char form
+      // of the ed2k hash, not the raw base32 btih from the magnet. Otherwise
+      // pre-grab blocklist/dedup matching by infohash never lines up with the
+      // post-grab download id.
+      const infoHash = ed2kHashToClientHash(item.fileHash)
 
       // Backdated 24h on purpose: a pubDate that's ever in the future
       // relative to Radarr/Sonarr's own clock (even by a few seconds, from

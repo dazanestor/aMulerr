@@ -1,5 +1,6 @@
 import { useAmule } from '#/amule'
 import { skipFalsy } from '#/lib/array'
+import { clientHashToEd2kHash } from '#/lib/links'
 import { createFileRoute } from '@tanstack/react-router'
 
 // https://github.com/qbittorrent/qBittorrent/wiki/WebUI-API-(qBittorrent-4.1)#set-force-start
@@ -21,6 +22,7 @@ export const Route = createFileRoute('/api/v2/torrents/setForceStart')({
           .toUpperCase()
           .split('|')
           .filter(skipFalsy)
+          .map((h) => clientHashToEd2kHash(h))
         const value = formData.get('value')?.toString() === 'true'
 
         if (value && hashes?.length) {
