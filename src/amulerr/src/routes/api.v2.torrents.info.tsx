@@ -1,7 +1,8 @@
 import { useAmule } from '#/amule'
 import type { DownloadItem } from '#/amule-ec-node/AmuleClient.mjs'
+import { skipFalsy } from '#/lib/array'
 import { isHashDeleted } from '#/lib/deleted'
-import { ed2kHashToClientHash } from '#/lib/links'
+import { clientHashToEd2kHash, ed2kHashToClientHash } from '#/lib/links'
 import { createFileRoute } from '@tanstack/react-router'
 
 export const Route = createFileRoute('/api/v2/torrents/info')({
@@ -10,6 +11,24 @@ export const Route = createFileRoute('/api/v2/torrents/info')({
       GET: async ({ request }: { request: Request }) => {
         const url = new URL(request.url)
         const categoryTitle = url.searchParams.get('category')
+
+        // qBittorrent's `hashes` filter (pipe-separated). Radarr/Sonarr don't
+        // use it, but Cleanuparr's client fetches one torrent at a time with
+        // `?hashes=<downloadId>` and takes the first result — without honouring
+        // the filter it would evaluate whichever torrent happens to be first.
+        const hashesParam = url.searchParams.get('hashes')
+        const wantedHashes =
+          hashesParam && hashesParam !== 'all'
+            ? new Set(
+                hashesParam
+                  .split('|')
+                  .filter(skipFalsy)
+                  .map(clientHashToEd2kHash),
+              )
+            : null
+        const matchesHash = (fileHash: string | undefined) =>
+          !wantedHashes ||
+          (!!fileHash && wantedHashes.has(fileHash.toUpperCase()))
 
         const { categories, shared, downloads } = await useAmule(
           async (amule) => {
@@ -49,13 +68,17 @@ export const Route = createFileRoute('/api/v2/torrents/info')({
           return Response.json([])
         }
 
-        const filteredDownloads = categoryTitle
-          ? downloads.filter((d) => d.category_obj === filterCategory)
-          : downloads
+        const filteredDownloads = (
+          categoryTitle
+            ? downloads.filter((d) => d.category_obj === filterCategory)
+            : downloads
+        ).filter((d) => matchesHash(d.fileHash))
 
-        const filteredShared = categoryTitle
-          ? shared.filter((s) => s.category_obj === filterCategory)
-          : shared
+        const filteredShared = (
+          categoryTitle
+            ? shared.filter((s) => s.category_obj === filterCategory)
+            : shared
+        ).filter((s) => matchesHash(s.fileHash))
 
         // qBittorrent structure
         return Response.json([

@@ -512,4 +512,63 @@ describe('torrents/info', () => {
     expect(body[0].seeding_time_limit).toBe(0)
     expect(body[0].seeding_time).toBe(42)
   })
+
+  const HASH_A = 'A'.repeat(32)
+  const HASH_B = 'B'.repeat(32)
+
+  it('reports the hash as the 40 hex char (zero-padded) client form', async () => {
+    amuleMock.getDownloadQueue.mockResolvedValue([
+      { fileHash: HASH_A, fileName: 'movie.mkv', fileSize: 1, status: 1 },
+    ])
+
+    const { Route } = await import('#/routes/api.v2.torrents.info')
+    const response = await getHandler(Route)({
+      request: new Request('http://x/api/v2/torrents/info'),
+    })
+    const body = await response.json()
+
+    expect(body[0].hash).toBe(`${HASH_A}00000000`)
+  })
+
+  it('filters by the ?hashes= param (Cleanuparr fetches one torrent at a time)', async () => {
+    amuleMock.getDownloadQueue.mockResolvedValue([
+      { fileHash: HASH_A, fileName: 'a.mkv', fileSize: 1, status: 1 },
+      { fileHash: HASH_B, fileName: 'b.mkv', fileSize: 1, status: 1 },
+    ])
+
+    const { Route } = await import('#/routes/api.v2.torrents.info')
+    const response = await getHandler(Route)({
+      request: new Request(
+        `http://x/api/v2/torrents/info?hashes=${HASH_B}00000000`,
+      ),
+    })
+    const body = await response.json()
+
+    expect(body).toHaveLength(1)
+    expect(body[0].hash).toBe(`${HASH_B}00000000`)
+  })
+})
+
+describe('torrents/trackers', () => {
+  it('returns an empty tracker list (ed2k downloads have no BitTorrent trackers)', async () => {
+    const { Route } = await import('#/routes/api.v2.torrents.trackers')
+    const response = await getHandler(Route)({
+      request: new Request('http://x/api/v2/torrents/trackers?hash=ABC'),
+    })
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual([])
+  })
+})
+
+describe('transfer/speedLimitsMode', () => {
+  it('reports alternative speed limits as off', async () => {
+    const { Route } = await import('#/routes/api.v2.transfer.speedLimitsMode')
+    const response = await getHandler(Route)({
+      request: new Request('http://x/api/v2/transfer/speedLimitsMode'),
+    })
+
+    expect(response.status).toBe(200)
+    expect(await response.text()).toBe('0')
+  })
 })
