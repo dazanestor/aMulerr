@@ -1,6 +1,7 @@
 import { useAmule } from '#/amule'
 import type { DownloadItem } from '#/amule-ec-node/AmuleClient.mjs'
 import { isHashDeleted } from '#/lib/deleted'
+import { ed2kHashToClientHash } from '#/lib/links'
 import { createFileRoute } from '@tanstack/react-router'
 
 export const Route = createFileRoute('/api/v2/torrents/info')({
@@ -59,7 +60,7 @@ export const Route = createFileRoute('/api/v2/torrents/info')({
         // qBittorrent structure
         return Response.json([
           ...filteredDownloads.map((f) => ({
-            hash: f.fileHash,
+            hash: ed2kHashToClientHash(f.fileHash),
             name: f.fileName,
             size: f.fileSize,
             tracker: 'http://amulerr',
@@ -106,7 +107,7 @@ export const Route = createFileRoute('/api/v2/torrents/info')({
             seeding_time: f.downloadActiveTime ?? 0,
           })),
           ...filteredShared.map((f) => ({
-            hash: f.fileHash,
+            hash: ed2kHashToClientHash(f.fileHash),
             name: f.fileName,
             size: f.fileSize,
             tracker: 'http://amulerr',

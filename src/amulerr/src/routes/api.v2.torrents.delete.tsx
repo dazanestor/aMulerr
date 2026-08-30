@@ -1,6 +1,7 @@
 import { useAmule } from '#/amule'
 import { skipFalsy } from '#/lib/array'
 import { addDeletedHash } from '#/lib/deleted'
+import { clientHashToEd2kHash } from '#/lib/links'
 import { createFileRoute } from '@tanstack/react-router'
 import fs from 'node:fs/promises'
 import path from 'node:path'
@@ -16,6 +17,7 @@ export const Route = createFileRoute('/api/v2/torrents/delete')({
           .toUpperCase()
           .split('|')
           .filter(skipFalsy)
+          .map((h) => clientHashToEd2kHash(h))
 
         const deleteFilesQsp = formData.get('deleteFiles')?.toString()
         const deleteFiles =
