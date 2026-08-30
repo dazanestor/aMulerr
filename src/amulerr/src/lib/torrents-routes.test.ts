@@ -547,6 +547,54 @@ describe('torrents/info', () => {
     expect(body).toHaveLength(1)
     expect(body[0].hash).toBe(`${HASH_B}00000000`)
   })
+
+  it('emits category/save_path as strings even for an uncategorised download', async () => {
+    amuleMock.getCategories.mockResolvedValue([])
+    amuleMock.getDownloadQueue.mockResolvedValue([
+      {
+        fileHash: HASH_A,
+        fileName: 'x.mkv',
+        fileSize: 1,
+        status: 1,
+        category: 7,
+      },
+    ])
+
+    const { Route } = await import('#/routes/api.v2.torrents.info')
+    const response = await getHandler(Route)({
+      request: new Request('http://x/api/v2/torrents/info'),
+    })
+    const body = await response.json()
+
+    expect(body[0].category).toBe('')
+    expect(body[0].save_path).toBe('')
+    expect(body[0].content_path).toBe('x.mkv')
+  })
+
+  it('honours ?filter=completed (only shared/complete files)', async () => {
+    amuleMock.getDownloadQueue.mockResolvedValue([
+      {
+        fileHash: HASH_A,
+        fileName: 'dl.mkv',
+        fileSize: 1,
+        status: 1,
+        progress: '20',
+      },
+    ])
+    amuleMock.getSharedFiles.mockResolvedValue([
+      { fileHash: HASH_B, fileName: 'done.mkv', fileSize: 1, path: '/x' },
+    ])
+
+    const { Route } = await import('#/routes/api.v2.torrents.info')
+    const response = await getHandler(Route)({
+      request: new Request('http://x/api/v2/torrents/info?filter=completed'),
+    })
+    const body = await response.json()
+
+    expect(body).toHaveLength(1)
+    expect(body[0].name).toBe('done.mkv')
+    expect(body[0].progress).toBe(1)
+  })
 })
 
 describe('torrents/trackers', () => {

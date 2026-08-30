@@ -81,7 +81,7 @@ export const Route = createFileRoute('/api/v2/torrents/info')({
         ).filter((s) => matchesHash(s.fileHash))
 
         // qBittorrent structure
-        return Response.json([
+        const items = [
           ...filteredDownloads.map((f) => ({
             hash: ed2kHashToClientHash(f.fileHash),
             name: f.fileName,
@@ -103,9 +103,15 @@ export const Route = createFileRoute('/api/v2/torrents/info')({
                   )
                 : 8640000,
             state: statusToQbittorrentState(f),
-            content_path: `${f.category_obj?.path}/${f.fileName}`,
-            save_path: f.category_obj?.path,
-            category: f.category_obj?.title,
+            // Always emit strings for these — real qBittorrent never returns
+            // null/undefined here, and Cleanuparr's ignored-downloads check
+            // (`download.Category.Equals(...)`) NREs on a null category once
+            // any ignore pattern is configured.
+            content_path: f.category_obj?.path
+              ? `${f.category_obj.path}/${f.fileName}`
+              : f.fileName,
+            save_path: f.category_obj?.path ?? '',
+            category: f.category_obj?.title ?? '',
             amount_left: f.fileSize - (f.fileSizeDownloaded ?? 0),
             num_complete: f.sourceCount,
             num_incomplete: f.sourceCountNotCurrent,
@@ -138,17 +144,61 @@ export const Route = createFileRoute('/api/v2/torrents/info')({
             progress: 1,
             dlspeed: 0,
             state: 'pausedUP' as const,
-            content_path: `${f.path}/${f.fileName}`,
-            save_path: f.path,
-            category: f.category_obj?.title,
+            content_path: f.path ? `${f.path}/${f.fileName}` : f.fileName,
+            save_path: f.path ?? '',
+            category: f.category_obj?.title ?? '',
             seeding_time_limit: 0,
             seeding_time: 0,
           })),
-        ])
+        ]
+
+        // qBittorrent's `state` filter. Cleanuparr's Download Cleaner asks for
+        // `filter=completed`; Radarr/Sonarr don't send it. Anything unknown
+        // (or `all`) falls through to "return everything".
+        const stateFilter = url.searchParams.get('filter')
+        return Response.json(
+          stateFilter
+            ? items.filter((it) =>
+                matchesStateFilter(stateFilter, it.state, it.progress),
+              )
+            : items,
+        )
       },
     },
   },
 })
+
+function matchesStateFilter(filter: string, state: string, progress: number) {
+  switch (filter) {
+    case 'completed':
+      return progress >= 1
+    case 'downloading':
+      return (
+        state === 'downloading' || state === 'stalledDL' || state === 'pausedDL'
+      )
+    case 'stalled':
+      return state === 'stalledDL' || state === 'pausedUP'
+    case 'stalled_downloading':
+      return state === 'stalledDL'
+    case 'seeding':
+    case 'uploading':
+    case 'stalled_uploading':
+      return state === 'pausedUP' && progress >= 1
+    case 'paused':
+    case 'stopped':
+      return state === 'pausedDL' || state === 'pausedUP'
+    case 'resumed':
+    case 'running':
+    case 'active':
+      return state === 'downloading'
+    case 'inactive':
+      return state !== 'downloading'
+    case 'errored':
+      return state === 'error'
+    default:
+      return true
+  }
+}
 
 function statusToQbittorrentState(f: DownloadItem) {
   switch (f.status) {
