@@ -1,6 +1,15 @@
 {
-  "include": ["**/*.ts", "**/*.tsx", "eslint.config.js", "prettier.config.js", "vite.config.js", "src/amule-ec-node/ECDefs.mjs", "src/amule-ec-node/AmuleClient.mjs", "src/amule-ec-node/ECProtocol.mjs"],
-  
+  "include": [
+    "**/*.ts",
+    "**/*.tsx",
+    "eslint.config.js",
+    "prettier.config.js",
+    "vite.config.js",
+    "src/amule-ec-node/ECDefs.mjs",
+    "src/amule-ec-node/AmuleClient.mjs",
+    "src/amule-ec-node/ECProtocol.mjs"
+  ],
+
   "compilerOptions": {
     "target": "ES2022",
     "jsx": "react-jsx",

@@ -1,6 +1,6 @@
-
 import { useAmule } from '#/amule'
 import { skipFalsy } from '#/lib/array'
+import { clientHashToEd2kHash } from '#/lib/links'
 import { createFileRoute } from '@tanstack/react-router'
 
 // https://github.com/qbittorrent/qBittorrent/wiki/WebUI-API-(qBittorrent-4.1)#start-torrents
@@ -10,11 +10,12 @@ export const Route = createFileRoute('/api/v2/torrents/start')({
       POST: async ({ request }) => {
         const formData = await request.formData()
         const hashes = formData
-          .get("hashes")
+          .get('hashes')
           ?.toString()
-          ?.toUpperCase()
-          ?.split("|")
+          .toUpperCase()
+          .split('|')
           .filter(skipFalsy)
+          .map((h) => clientHashToEd2kHash(h))
 
         if (hashes?.length) {
           await useAmule(async (amule) => {
@@ -24,8 +25,8 @@ export const Route = createFileRoute('/api/v2/torrents/start')({
           })
         }
 
-        return new Response("Ok", { status: 200 })
-      }
-    }
+        return new Response('Ok', { status: 200 })
+      },
+    },
   },
 })

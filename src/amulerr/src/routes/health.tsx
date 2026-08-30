@@ -4,9 +4,8 @@ export const Route = createFileRoute('/health')({
   server: {
     handlers: {
       GET: async () => {
-        return Response.json({ ok: true });
+        return Response.json({ ok: true })
       },
     },
   },
 })
-

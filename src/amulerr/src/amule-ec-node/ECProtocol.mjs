@@ -1,218 +1,252 @@
-"use strict";
+'use strict'
 
-import { inspect } from 'util';
-import { Socket } from "net";
-import { createHash } from "crypto";
-import { EC_OPCODES, EC_TAGS, EC_TAG_TYPES, PROTOCOL_VERSION } from "./ECDefs.mjs";
+import { inspect } from 'util'
+import { Socket } from 'net'
+import { createHash } from 'crypto'
+import { Mutex } from 'async-mutex'
+import {
+  EC_OPCODES,
+  EC_TAGS,
+  EC_TAG_TYPES,
+  PROTOCOL_VERSION,
+} from './ECDefs.mjs'
 
-const DEBUG = false;
+const DEBUG = false
 
 class ECProtocol {
   constructor(host = HOST, port = PORT, password = PASSWORD, options = {}) {
-    this.host = host;
-    this.port = port;
-    this.password = password;
-    this.socket = null;
-    this.bufferedData = Buffer.alloc(0);
-    this.manualClose = false;
-    this.reconnecting = false;
-    this.pendingRequests = [];
+    this.host = host
+    this.port = port
+    this.password = password
+    this.socket = null
+    this.bufferedData = Buffer.alloc(0)
+    this.manualClose = false
+    this.reconnecting = false
+    this.pendingRequests = []
     // Per-request timeout in ms (0 = disabled). Default 30s.
-    this.requestTimeout = options.requestTimeout !== undefined ? options.requestTimeout : 30000;
+    this.requestTimeout =
+      options.requestTimeout !== undefined ? options.requestTimeout : 30000
     // Consecutive timeout counter — after 2 in a row, destroy socket to trigger reconnect
-    this.consecutiveTimeouts = 0;
+    this.consecutiveTimeouts = 0
+    // EC has no request/response correlation (no request ID in the wire format), so
+    // only one request can be in flight on a connection at a time. Concurrent callers
+    // (e.g. Promise.all on the same client) would otherwise race on the shared "data"
+    // listener and could resolve with a DIFFERENT request's response. Serialize here.
+    this.sendMutex = new Mutex()
   }
 
   async connect() {
     return new Promise((resolve, reject) => {
-      this.socket = new Socket();
+      this.socket = new Socket()
 
-      const onError = (err) => reject(err);
-      this.socket.once("error", onError);
+      const onError = (err) => reject(err)
+      this.socket.once('error', onError)
 
       this.socket.connect(this.port, this.host, () => {
-        if (DEBUG) console.log("Connected to aMule EC interface");
-        this.socket.removeListener("error", onError);
-        this.setupSocketListeners();
-        resolve();
-      });
-    });
+        if (DEBUG) console.log('Connected to aMule EC interface')
+        this.socket.removeListener('error', onError)
+        this.setupSocketListeners()
+        resolve()
+      })
+    })
   }
 
   setupSocketListeners() {
-    this.socket.on("close", async () => {
-      this.rejectPendingRequests(new Error("Connection closed"));
+    // Node never awaits (or attaches a rejection handler to) the return
+    // value of an "on" listener — if reconnect() ultimately rejects (all
+    // retries exhausted), an unawaited call here becomes an unhandled
+    // promise rejection instead of the graceful "give up until the next
+    // close/error event" behavior we actually want. Catch and log instead.
+    this.socket.on('close', async () => {
+      this.rejectPendingRequests(new Error('Connection closed'))
 
       if (this.manualClose === false && !this.reconnecting) {
-        console.warn("[ECProtocol] Connection closed. Attempting reconnect...");
-        await this.reconnect();
+        console.warn('[ECProtocol] Connection closed. Attempting reconnect...')
+        try {
+          await this.reconnect()
+        } catch (err) {
+          console.error('[ECProtocol] Reconnect failed:', err.message)
+        }
       }
-    });
+    })
 
-    this.socket.on("error", async (err) => {
-      console.error("[ECProtocol] Socket error:", err.message);
+    this.socket.on('error', async (err) => {
+      console.error('[ECProtocol] Socket error:', err.message)
 
-      this.rejectPendingRequests(err);
+      this.rejectPendingRequests(err)
 
-      if (!this.socket.destroyed) this.socket.destroy();
+      if (!this.socket.destroyed) this.socket.destroy()
 
       if (!this.reconnecting) {
-        await this.reconnect();
+        try {
+          await this.reconnect()
+        } catch (reconnectErr) {
+          console.error('[ECProtocol] Reconnect failed:', reconnectErr.message)
+        }
       }
-    });
+    })
   }
 
   rejectPendingRequests(error) {
     while (this.pendingRequests.length > 0) {
-      const request = this.pendingRequests.shift();
+      const request = this.pendingRequests.shift()
       if (this.socket) {
-        this.socket.removeListener("data", request.onData);
+        this.socket.removeListener('data', request.onData)
       }
-      request.reject(error);
+      request.reject(error)
     }
   }
 
   close() {
     if (this.socket) {
-      this.manualClose = true;
-      this.rejectPendingRequests(new Error("Connection manually closed"));
-      this.socket.end();
-      this.socket.destroy();
-      this.socket = null;
+      this.manualClose = true
+      this.rejectPendingRequests(new Error('Connection manually closed'))
+      this.socket.end()
+      this.socket.destroy()
+      this.socket = null
     }
   }
 
   async reconnect(retries = 6, delayMs = 10000) {
-    if (this.reconnecting) return;
-    this.reconnecting = true;
-    this.manualClose = false;
+    if (this.reconnecting) return
+    this.reconnecting = true
+    this.manualClose = false
 
     if (this.socket) {
-      this.rejectPendingRequests(new Error("Reconnecting"));
-      this.socket.removeAllListeners();
+      this.rejectPendingRequests(new Error('Reconnecting'))
+      this.socket.removeAllListeners()
       if (!this.socket.destroyed) {
-        this.socket.destroy();
+        this.socket.destroy()
       }
-      this.socket = null;
+      this.socket = null
     }
 
     for (let i = 0; i < retries; i++) {
       try {
-        if (DEBUG) console.log(`[ECProtocol] Reconnection attempt ${i + 1}...`);
-        await this.connect();
-        if (DEBUG) console.log(`[ECProtocol] Authentication attempt ${i + 1}...`);
-        await this.authenticate();
-        console.log("[ECProtocol] Reconnected and authenticated successfully.");
-        this.consecutiveTimeouts = 0;
-        this.reconnecting = false;
+        if (DEBUG) console.log(`[ECProtocol] Reconnection attempt ${i + 1}...`)
+        await this.connect()
+        if (DEBUG)
+          console.log(`[ECProtocol] Authentication attempt ${i + 1}...`)
+        await this.authenticate()
+        console.log('[ECProtocol] Reconnected and authenticated successfully.')
+        this.consecutiveTimeouts = 0
+        this.reconnecting = false
         // Notify subclasses to clear incremental state (XOR buffers, update caches)
-        if (typeof this.onReconnected === 'function') this.onReconnected();
-        return;
+        if (typeof this.onReconnected === 'function') this.onReconnected()
+        return
       } catch (err) {
-        console.warn(`[ECProtocol] Reconnect attempt ${i + 1} failed:`, err.message);
+        console.warn(
+          `[ECProtocol] Reconnect attempt ${i + 1} failed:`,
+          err.message,
+        )
         if (i < retries - 1) {
-          await new Promise(r => setTimeout(r, delayMs));
+          await new Promise((r) => setTimeout(r, delayMs))
         }
       }
     }
 
-    this.reconnecting = false;
-    throw new Error("[ECProtocol] Unable to reconnect after multiple attempts.");
+    this.reconnecting = false
+    throw new Error('[ECProtocol] Unable to reconnect after multiple attempts.')
   }
 
   /*
    * Build a tag.
    */
   createTag(tagId, tagType, value, children = []) {
-    if (tagType === undefined) throw new Error('Called createTag with undefined tagType');
+    if (tagType === undefined)
+      throw new Error('Called createTag with undefined tagType')
 
     // Determine if children exist and mark the tagId accordingly (lowest bit set if there are children)
-    const hasChildren = Array.isArray(children) && children.length > 0;
+    const hasChildren = Array.isArray(children) && children.length > 0
     // Shift tagId one bit to the left so that the lowest bit is free:
-    let encodedTagId = tagId << 1;
-    if (hasChildren) encodedTagId |= 1;
+    let encodedTagId = tagId << 1
+    if (hasChildren) encodedTagId |= 1
 
     // Build children block first
-    let childrenContent = Buffer.alloc(0);
+    let childrenContent = Buffer.alloc(0)
     if (hasChildren) {
-      const countBuf = Buffer.alloc(2);
-      countBuf.writeUInt16BE(children.length, 0);
-      const childBuffers = children.map(c =>
-        this.createTag(c.tagId, c.tagType, c.value, c.children || [])
-      );
-      childrenContent = Buffer.concat([countBuf, ...childBuffers]);
+      const countBuf = Buffer.alloc(2)
+      countBuf.writeUInt16BE(children.length, 0)
+      const childBuffers = children.map((c) =>
+        this.createTag(c.tagId, c.tagType, c.value, c.children || []),
+      )
+      childrenContent = Buffer.concat([countBuf, ...childBuffers])
     }
 
     // Now build valueBuffer (only if the tag has its own value)
-    let valueBuffer = Buffer.alloc(0);
+    let valueBuffer = Buffer.alloc(0)
     if (!hasChildren || value !== undefined) {
       switch (tagType) {
         case EC_TAG_TYPES.EC_TAGTYPE_STRING:
           // For strings, we use UTF-8 with a terminating null byte.
-          valueBuffer = Buffer.from(value + "\0", "utf8");
-          break;
+          valueBuffer = Buffer.from(value + '\0', 'utf8')
+          break
         case EC_TAG_TYPES.EC_TAGTYPE_UINT32:
-          valueBuffer = Buffer.alloc(4);
-          valueBuffer.writeUInt32BE(value, 0);
-          break;
+          valueBuffer = Buffer.alloc(4)
+          valueBuffer.writeUInt32BE(value, 0)
+          break
         case EC_TAG_TYPES.EC_TAGTYPE_UINT16:
-          valueBuffer = Buffer.alloc(2);
-          valueBuffer.writeUInt16BE(value, 0);
-          break;
+          valueBuffer = Buffer.alloc(2)
+          valueBuffer.writeUInt16BE(value, 0)
+          break
         case EC_TAG_TYPES.EC_TAGTYPE_UINT8:
-          valueBuffer = Buffer.alloc(1);
-          valueBuffer.writeUInt8(value, 0);
-          break;
+          valueBuffer = Buffer.alloc(1)
+          valueBuffer.writeUInt8(value, 0)
+          break
         case EC_TAG_TYPES.EC_TAGTYPE_IPV4:
-          const { ip, port } = value;
-          const parts = ip.split('.').map(Number);
-          valueBuffer = Buffer.alloc(6);
+          const { ip, port } = value
+          const parts = ip.split('.').map(Number)
+          valueBuffer = Buffer.alloc(6)
 
           // IP little-endian
-          valueBuffer[0] = parts[0];
-          valueBuffer[1] = parts[1];
-          valueBuffer[2] = parts[2];
-          valueBuffer[3] = parts[3];
+          valueBuffer[0] = parts[0]
+          valueBuffer[1] = parts[1]
+          valueBuffer[2] = parts[2]
+          valueBuffer[3] = parts[3]
 
           // Port big-endian (network order)
-          valueBuffer.writeUInt16BE(port, 4);
-          break;
+          valueBuffer.writeUInt16BE(port, 4)
+          break
         case EC_TAG_TYPES.EC_TAGTYPE_HASH16:
-          if (typeof value === "string") {
+          if (typeof value === 'string') {
             // Assumes hexadecimal string format.
-            valueBuffer = Buffer.from(value, "hex");
+            valueBuffer = Buffer.from(value, 'hex')
           } else if (Buffer.isBuffer(value)) {
-            valueBuffer = value;
+            valueBuffer = value
           } else {
-            throw new Error("Invalid HASH16 value; expected hex string or Buffer");
+            throw new Error(
+              'Invalid HASH16 value; expected hex string or Buffer',
+            )
           }
-          break;
+          break
         default:
-          throw new Error(`Unsupported tag type: 0x${tagType.toString(16)}`);
+          throw new Error(`Unsupported tag type: 0x${tagType.toString(16)}`)
       }
     }
 
     // Total payload length includes children + value
-    let payloadLength = childrenContent.length + valueBuffer.length;
-    if (hasChildren) payloadLength = payloadLength - 2;
+    let payloadLength = childrenContent.length + valueBuffer.length
+    if (hasChildren) payloadLength = payloadLength - 2
 
-    const header = Buffer.alloc(7);
-    header.writeUInt16BE(encodedTagId, 0); // 2 bytes: tag name
-    header.writeUInt8(tagType, 2);         // 1 byte: tag type
-    header.writeUInt32BE(payloadLength, 3); // 4 bytes: tag payload length
+    const header = Buffer.alloc(7)
+    header.writeUInt16BE(encodedTagId, 0) // 2 bytes: tag name
+    header.writeUInt8(tagType, 2) // 1 byte: tag type
+    header.writeUInt32BE(payloadLength, 3) // 4 bytes: tag payload length
 
     if (DEBUG) {
       console.log(
         `[TAG] id=0x${tagId.toString(16)} (encoded=0x${encodedTagId.toString(16)}), ` +
-        `type=0x${tagType.toString(16)}, hasChildren=${hasChildren}, ` +
-        `payloadLength=${payloadLength}`
-      );
+          `type=0x${tagType.toString(16)}, hasChildren=${hasChildren}, ` +
+          `payloadLength=${payloadLength}`,
+      )
       if (hasChildren) {
-        console.log(`[CHILD TAGS] childrenContent: ${childrenContent.toString("hex")}`);
+        console.log(
+          `[CHILD TAGS] childrenContent: ${childrenContent.toString('hex')}`,
+        )
       }
     }
 
-    return Buffer.concat([header, childrenContent, valueBuffer]);
+    return Buffer.concat([header, childrenContent, valueBuffer])
   }
 
   /*
@@ -224,30 +258,34 @@ class ECProtocol {
    */
   buildPacket(opcode, tags) {
     // Transmission layer: 4 bytes flags (here fixed to 0x20)
-    const flags = Buffer.alloc(4);
-    flags.writeUInt32BE(0x20, 0);
+    const flags = Buffer.alloc(4)
+    flags.writeUInt32BE(0x20, 0)
 
     // Build application layer.
-    const opcodeBuf = Buffer.from([opcode]);
-    const tagCountBuf = Buffer.alloc(2);
-    tagCountBuf.writeUInt16BE(tags.length, 0);
-    const tagsBuf = Buffer.concat(tags);
-    const appData = Buffer.concat([opcodeBuf, tagCountBuf, tagsBuf]);
+    const opcodeBuf = Buffer.from([opcode])
+    const tagCountBuf = Buffer.alloc(2)
+    tagCountBuf.writeUInt16BE(tags.length, 0)
+    const tagsBuf = Buffer.concat(tags)
+    const appData = Buffer.concat([opcodeBuf, tagCountBuf, tagsBuf])
 
     // Payload length (application data) is written as 4 bytes.
-    const lengthBuf = Buffer.alloc(4);
-    lengthBuf.writeUInt32BE(appData.length, 0);
+    const lengthBuf = Buffer.alloc(4)
+    lengthBuf.writeUInt32BE(appData.length, 0)
 
-    const packet = Buffer.concat([flags, lengthBuf, appData]);
+    const packet = Buffer.concat([flags, lengthBuf, appData])
     if (DEBUG) {
-      console.log(`[PACKET STRUCTURE CHECK] flags=${flags.toString('hex')}, length=${lengthBuf.toString('hex')}`);
-      console.log(`[PACKET] opcode=0x${opcode.toString(16)}, ` +
-        `tagCount=${tags.length}, ` +
-        `appDataLen=${appData.length}, ` +
-        `totalLen=${packet.length}`);
-      console.log(`Final packet hex:\n${packet.toString('hex')}`);
+      console.log(
+        `[PACKET STRUCTURE CHECK] flags=${flags.toString('hex')}, length=${lengthBuf.toString('hex')}`,
+      )
+      console.log(
+        `[PACKET] opcode=0x${opcode.toString(16)}, ` +
+          `tagCount=${tags.length}, ` +
+          `appDataLen=${appData.length}, ` +
+          `totalLen=${packet.length}`,
+      )
+      console.log(`Final packet hex:\n${packet.toString('hex')}`)
     }
-    return packet;
+    return packet
   }
 
   /*
@@ -256,94 +294,120 @@ class ECProtocol {
    * within this.requestTimeout ms (0 = no timeout).
    */
   async sendPacket(opcode, tags = []) {
+    return this.sendMutex.runExclusive(() =>
+      this._sendPacketExclusive(opcode, tags),
+    )
+  }
+
+  async _sendPacketExclusive(opcode, tags = []) {
     return new Promise((resolve, reject) => {
-      let buffer = Buffer.alloc(0);
-      let timer = null;
-      let settled = false;
+      let buffer = Buffer.alloc(0)
+      let timer = null
+      let settled = false
 
       const cleanup = () => {
-        if (timer) { clearTimeout(timer); timer = null; }
-        const index = this.pendingRequests.findIndex(r => r.onData === onData);
+        if (timer) {
+          clearTimeout(timer)
+          timer = null
+        }
+        const index = this.pendingRequests.findIndex((r) => r.onData === onData)
         if (index !== -1) {
-          this.pendingRequests.splice(index, 1);
+          this.pendingRequests.splice(index, 1)
         }
         if (this.socket) {
-          this.socket.removeListener("data", onData);
+          this.socket.removeListener('data', onData)
         }
-      };
+      }
 
       const onData = (data) => {
         try {
-          buffer = Buffer.concat([buffer, data]);
+          buffer = Buffer.concat([buffer, data])
 
           if (buffer.length < 8) {
-            return; // Wait until we have at least the header
+            return // Wait until we have at least the header
           }
 
-          const payloadLength = buffer.readUInt32BE(4);
-          const expectedLength = payloadLength + 8;
+          const payloadLength = buffer.readUInt32BE(4)
+          const expectedLength = payloadLength + 8
 
           if (buffer.length < expectedLength) {
-            return; // Wait for more data
+            return // Wait for more data
           }
 
-          settled = true;
-          cleanup();
-          this.consecutiveTimeouts = 0; // Successful response — reset timeout counter
+          settled = true
+          cleanup()
+          this.consecutiveTimeouts = 0 // Successful response — reset timeout counter
 
           // Process the full packet
-          const parsed = this.parsePacket(buffer);
-          if (DEBUG) console.log("Received packet", inspect(parsed, { showHidden: false, depth: null, colors: true }));
+          const parsed = this.parsePacket(buffer)
+          if (DEBUG)
+            console.log(
+              'Received packet',
+              inspect(parsed, { showHidden: false, depth: null, colors: true }),
+            )
 
-          resolve(parsed);
+          resolve(parsed)
         } catch (err) {
-          settled = true;
-          cleanup();
-          reject(err);
+          settled = true
+          cleanup()
+          reject(err)
         }
-      };
+      }
 
       // Send the packet
       try {
         if (!this.socket || this.socket.destroyed) {
-          throw new Error("Socket is not connected");
+          throw new Error('Socket is not connected')
         }
 
-        const packet = this.buildPacket(opcode, tags);
-        this.pendingRequests.push({ resolve, reject, onData });
-        this.socket.on("data", onData);
-        this.socket.write(packet);
+        const packet = this.buildPacket(opcode, tags)
+        this.pendingRequests.push({ resolve, reject, onData })
+        this.socket.on('data', onData)
+        this.socket.write(packet)
 
         // Start timeout if configured
         if (this.requestTimeout > 0) {
           timer = setTimeout(() => {
-            if (settled) return;
-            settled = true;
-            cleanup();
-            this.consecutiveTimeouts++;
-            const opcodeStr = this.getKeyByValue(EC_OPCODES, opcode);
+            if (settled) return
+            settled = true
+            cleanup()
+            this.consecutiveTimeouts++
+            const opcodeStr = this.getKeyByValue(EC_OPCODES, opcode)
 
             // After 2 consecutive timeouts, the connection is likely dead.
             // Destroy the socket to trigger the 'close' handler → automatic reconnect.
-            if (this.consecutiveTimeouts >= 2 && this.socket && !this.socket.destroyed) {
-              console.warn(`[ECProtocol] ${this.consecutiveTimeouts} consecutive timeouts — destroying socket to trigger reconnect`);
-              this.socket.destroy();
+            if (
+              this.consecutiveTimeouts >= 2 &&
+              this.socket &&
+              !this.socket.destroyed
+            ) {
+              console.warn(
+                `[ECProtocol] ${this.consecutiveTimeouts} consecutive timeouts — destroying socket to trigger reconnect`,
+              )
+              this.socket.destroy()
             }
 
-            reject(new Error(`Request timed out after ${this.requestTimeout}ms (opcode: ${opcodeStr})`));
-          }, this.requestTimeout);
+            reject(
+              new Error(
+                `Request timed out after ${this.requestTimeout}ms (opcode: ${opcodeStr})`,
+              ),
+            )
+          }, this.requestTimeout)
         }
       } catch (err) {
-        settled = true;
-        cleanup();
-        reject(err);
+        settled = true
+        cleanup()
+        reject(err)
       }
-    });
+    })
   }
 
   // Reverse lookup helper
   getKeyByValue(obj, value) {
-    return Object.entries(obj).find(([_, v]) => v === value)?.[0] || `UNKNOWN (${value})`;
+    return (
+      Object.entries(obj).find(([_, v]) => v === value)?.[0] ||
+      `UNKNOWN (${value})`
+    )
   }
 
   /*
@@ -355,27 +419,33 @@ class ECProtocol {
    * - Then the application layer: 1-byte opcode, 2-byte tag count, then tags.
    */
   parsePacket(buffer) {
-    let offset = 0;
-    const flags = buffer.readUInt32BE(offset);
-    offset += 4;
-    const payloadLength = buffer.readUInt32BE(offset);
-    offset += 4;
-    const opcode = buffer.readUInt8(offset);
-    const opcodeStr = this.getKeyByValue(EC_OPCODES, opcode);
-    offset += 1;
-    const tagCount = buffer.readUInt16BE(offset);
-    offset += 2;
+    let offset = 0
+    const flags = buffer.readUInt32BE(offset)
+    offset += 4
+    const payloadLength = buffer.readUInt32BE(offset)
+    offset += 4
+    const opcode = buffer.readUInt8(offset)
+    const opcodeStr = this.getKeyByValue(EC_OPCODES, opcode)
+    offset += 1
+    const tagCount = buffer.readUInt16BE(offset)
+    offset += 2
 
-    if (DEBUG) console.log('Processing tags of ', { flags, payloadLength, opcode, tagCount });
+    if (DEBUG)
+      console.log('Processing tags of ', {
+        flags,
+        payloadLength,
+        opcode,
+        tagCount,
+      })
 
-    let tags = [];
+    let tags = []
     for (let i = 0; i < tagCount; i++) {
-      const result = this.readTag(buffer, offset);
-      tags.push(result.tag);
-      offset = result.newOffset;
+      const result = this.readTag(buffer, offset)
+      tags.push(result.tag)
+      offset = result.newOffset
     }
 
-    return { flags, payloadLength, opcode, opcodeStr, tagCount, tags };
+    return { flags, payloadLength, opcode, opcodeStr, tagCount, tags }
   }
 
   /*
@@ -390,80 +460,91 @@ class ECProtocol {
    * followed by each child (recursively), and then the tag's own value (if any).
    */
   readTag(buffer, offset) {
-    const start = offset;
+    const start = offset
 
     if (offset + 7 > buffer.length) {
-      throw new Error("Insufficient data for tag header.");
+      throw new Error('Insufficient data for tag header.')
     }
-    const rawTagName = buffer.readUInt16BE(offset);
-    offset += 2;
-    const hasChildren = (rawTagName & 0x0001) !== 0;
-    const tagId = rawTagName >> 1;
-    const tagIdStr = this.getKeyByValue(EC_TAGS, tagId);
-    const tagType = buffer.readUInt8(offset);
-    const tagTypeStr = this.getKeyByValue(EC_TAG_TYPES, tagType);
-    offset += 1;
-    const tagLen = buffer.readUInt32BE(offset);
-    offset += 4;
+    const rawTagName = buffer.readUInt16BE(offset)
+    offset += 2
+    const hasChildren = (rawTagName & 0x0001) !== 0
+    const tagId = rawTagName >> 1
+    const tagIdStr = this.getKeyByValue(EC_TAGS, tagId)
+    const tagType = buffer.readUInt8(offset)
+    const tagTypeStr = this.getKeyByValue(EC_TAG_TYPES, tagType)
+    offset += 1
+    const tagLen = buffer.readUInt32BE(offset)
+    offset += 4
 
-    let children = [];
-    let tagValue;
+    let children = []
+    let tagValue
 
     if (hasChildren) {
       // Read child count.
       if (offset + 2 > buffer.length) {
-        throw new Error("Insufficient data for children count.");
+        throw new Error('Insufficient data for children count.')
       }
-      const childCount = buffer.readUInt16BE(offset);
-      offset += 2;
+      const childCount = buffer.readUInt16BE(offset)
+      offset += 2
       // Recursively read each child.
       for (let i = 0; i < childCount; i++) {
-        const result = this.readTag(buffer, offset);
-        children.push(result.tag);
-        offset = result.newOffset;
+        const result = this.readTag(buffer, offset)
+        children.push(result.tag)
+        offset = result.newOffset
       }
       // The tag's own value is what remains of the payload.
-      const headerSize = 7 + 2; // tag header + children count field
-      const consumed = offset - (start + headerSize);
-      const valueLength = tagLen - consumed;
+      const headerSize = 7 + 2 // tag header + children count field
+      const consumed = offset - (start + headerSize)
+      const valueLength = tagLen - consumed
       if (valueLength < 0) {
-        throw new Error("Invalid tag length: negative value length");
+        throw new Error('Invalid tag length: negative value length')
       }
-      tagValue = buffer.slice(offset, offset + valueLength);
-      offset += valueLength;
+      tagValue = buffer.slice(offset, offset + valueLength)
+      offset += valueLength
     } else {
-      tagValue = buffer.slice(offset, offset + tagLen);
-      offset += tagLen;
+      tagValue = buffer.slice(offset, offset + tagLen)
+      offset += tagLen
     }
 
-    let humanValue;
+    let humanValue
     if (tagType === EC_TAG_TYPES.EC_TAGTYPE_CUSTOM) {
-      humanValue = undefined;
+      humanValue = undefined
     } else if (tagType === EC_TAG_TYPES.EC_TAGTYPE_UINT8) {
-      humanValue = tagValue.readUInt8(0);
+      humanValue = tagValue.readUInt8(0)
     } else if (tagType === EC_TAG_TYPES.EC_TAGTYPE_UINT16) {
-      humanValue = tagValue.readUInt16BE(0);
+      humanValue = tagValue.readUInt16BE(0)
     } else if (tagType === EC_TAG_TYPES.EC_TAGTYPE_UINT32) {
-      humanValue = tagValue.readUInt32BE(0);
+      humanValue = tagValue.readUInt32BE(0)
     } else if (tagType === EC_TAG_TYPES.EC_TAGTYPE_UINT64) {
-      humanValue = tagValue.readBigUInt64BE(0).toString();
+      humanValue = tagValue.readBigUInt64BE(0).toString()
     } else if (tagType === EC_TAG_TYPES.EC_TAGTYPE_UINT128) {
-      humanValue = tagValue.readBigUInt64BE(0).toString() + tagValue.readBigUInt64BE(8).toString();
+      // Combine the two big-endian 64-bit halves into one 128-bit integer
+      // (high << 64n | low) — string-concatenating the two decimal halves,
+      // as before, produced a number with no numeric relation to the real value.
+      const high = tagValue.readBigUInt64BE(0)
+      const low = tagValue.readBigUInt64BE(8)
+      humanValue = ((high << 64n) | low).toString()
     } else if (tagType === EC_TAG_TYPES.EC_TAGTYPE_STRING) {
-      humanValue = tagValue.toString('utf8').replace(/\0+$/, '');
+      humanValue = tagValue.toString('utf8').replace(/\0+$/, '')
     } else if (tagType === EC_TAG_TYPES.EC_TAGTYPE_DOUBLE) {
-      humanValue = parseFloat(tagValue.toString('utf8').replace(/\0+$/, ''));
+      humanValue = parseFloat(tagValue.toString('utf8').replace(/\0+$/, ''))
     } else if (tagType === EC_TAG_TYPES.EC_TAGTYPE_HASH16) {
-      humanValue = tagValue.toString('hex');
-      if (humanValue.length !== 32) console.warn('Warning: HASH16 incorrect length');
+      humanValue = tagValue.toString('hex')
+      if (humanValue.length !== 32)
+        console.warn('Warning: HASH16 incorrect length')
     } else if (tagType === EC_TAG_TYPES.EC_TAGTYPE_IPV4) {
-      const ipBytes = tagValue.slice(0, 4);
-      const portBytes = tagValue.slice(4, 6);
-      const ipStr = Array.from(ipBytes).join('.');
-      const port = portBytes.readUInt16BE(0);
-      humanValue = `${ipStr}:${port}`;
+      const ipBytes = tagValue.slice(0, 4)
+      const portBytes = tagValue.slice(4, 6)
+      const ipStr = Array.from(ipBytes).join('.')
+      const port = portBytes.readUInt16BE(0)
+      humanValue = `${ipStr}:${port}`
     } else {
-      throw new Error("Parsing unsopported tagType 0x" + tagType.toString(16) + " for tagId " + tagIdStr);
+      throw new Error(
+        'Parsing unsopported tagType 0x' +
+          tagType.toString(16) +
+          ' for tagId ' +
+          tagIdStr,
+      )
     }
 
     const tag = {
@@ -474,85 +555,84 @@ class ECProtocol {
       tagLen,
       value: tagValue,
       humanValue: humanValue,
-      children
-    };
+      children,
+    }
 
-    return { tag, newOffset: offset };
+    return { tag, newOffset: offset }
   }
 
   /*
    * Authentication flow.
    */
   async authenticate() {
-    if (DEBUG) console.log("[ECProtocol] Authenticating...");
+    if (DEBUG) console.log('[ECProtocol] Authenticating...')
 
     // Step 1: Build and send the AUTH_REQ packet.
     const clientNameTag = this.createTag(
       EC_TAGS.EC_TAG_CLIENT_NAME,
       EC_TAG_TYPES.EC_TAGTYPE_STRING,
-      "amulerr"
-    );
+      'amulerr',
+    )
     const clientVerTag = this.createTag(
       EC_TAGS.EC_TAG_CLIENT_VERSION,
       EC_TAG_TYPES.EC_TAGTYPE_STRING,
-      "1.0"
-    );
+      '1.0',
+    )
     const protocolVerTag = this.createTag(
       EC_TAGS.EC_TAG_PROTOCOL_VERSION,
       EC_TAG_TYPES.EC_TAGTYPE_UINT16,
-      PROTOCOL_VERSION.EC_CURRENT_PROTOCOL_VERSION
-    );
+      PROTOCOL_VERSION.EC_CURRENT_PROTOCOL_VERSION,
+    )
 
     const saltResponse = await this.sendPacket(EC_OPCODES.EC_OP_AUTH_REQ, [
       clientNameTag,
       clientVerTag,
       protocolVerTag,
-    ]);
+    ])
 
     // Step 2: Make sure we received the salt.
     if (saltResponse.opcode !== EC_OPCODES.EC_OP_AUTH_SALT) {
-      const reason = saltResponse.tags?.[0]?.humanValue || 'unknown reason';
+      const reason = saltResponse.tags?.[0]?.humanValue || 'unknown reason'
       throw new Error(
-        `Authentication failed at salt exchange (opcode: 0x${saltResponse.opcode.toString(16)}): ${reason}`
-      );
+        `Authentication failed at salt exchange (opcode: 0x${saltResponse.opcode.toString(16)}): ${reason}`,
+      )
     }
-    const saltBuffer = saltResponse.tags[0].value;
+    const saltBuffer = saltResponse.tags[0].value
     // aMule formats the salt as %lX (uppercase hex, no leading zeros) from a uint64.
     // We must match: read as BigInt, convert to uppercase hex without leading zeros.
-    const saltValue = saltBuffer.readBigUInt64BE(0);
-    const hexSalt = saltValue.toString(16).toUpperCase();
+    const saltValue = saltBuffer.readBigUInt64BE(0)
+    const hexSalt = saltValue.toString(16).toUpperCase()
     //console.log("Received salt:", hexSalt);
 
     // Step 3: Compute the password hash.
-    const hashedSalt = createHash("md5").update(hexSalt).digest("hex");
-    const hashedPass = createHash("md5")
-      .update(this.password)
-      .digest("hex");
-    const passwdHash = createHash("md5")
+    const hashedSalt = createHash('md5').update(hexSalt).digest('hex')
+    const hashedPass = createHash('md5').update(this.password).digest('hex')
+    const passwdHash = createHash('md5')
       .update(hashedPass + hashedSalt)
-      .digest("hex");
+      .digest('hex')
     //console.log("Computed password hash:", passwdHash);
 
     // Step 4: Send the AUTH_PASSWD packet.
     const passwdTag = this.createTag(
       EC_TAGS.EC_TAG_PASSWD_HASH,
       EC_TAG_TYPES.EC_TAGTYPE_HASH16,
-      passwdHash
-    );
+      passwdHash,
+    )
 
-    const authReply = await this.sendPacket(EC_OPCODES.EC_OP_AUTH_PASSWD, [passwdTag]);
+    const authReply = await this.sendPacket(EC_OPCODES.EC_OP_AUTH_PASSWD, [
+      passwdTag,
+    ])
 
     // Step 5: Check the server's response.
     if (authReply.opcode === EC_OPCODES.EC_OP_AUTH_OK) {
-      if (DEBUG) console.log("Authentication successful");
+      if (DEBUG) console.log('Authentication successful')
     } else {
-      const reason = authReply.tags?.[0]?.humanValue || 'unknown reason';
+      const reason = authReply.tags?.[0]?.humanValue || 'unknown reason'
       throw new Error(
-        `Authentication failed (opcode: 0x${authReply.opcode.toString(16)}): ${reason}`
-      );
+        `Authentication failed (opcode: 0x${authReply.opcode.toString(16)}): ${reason}`,
+      )
     }
   }
-
 }
 
-export default ECProtocol;
+export default ECProtocol

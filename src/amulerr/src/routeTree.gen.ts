@@ -12,20 +12,32 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as HealthRouteImport } from './routes/health'
 import { Route as ApiRouteImport } from './routes/api'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ApiV2TransferSpeedLimitsModeRouteImport } from './routes/api.v2.transfer.speedLimitsMode'
+import { Route as ApiV2TorrentsTrackersRouteImport } from './routes/api.v2.torrents.trackers'
+import { Route as ApiV2TorrentsTopPrioRouteImport } from './routes/api.v2.torrents.topPrio'
 import { Route as ApiV2TorrentsStopRouteImport } from './routes/api.v2.torrents.stop'
 import { Route as ApiV2TorrentsStartRouteImport } from './routes/api.v2.torrents.start'
+import { Route as ApiV2TorrentsSetShareLimitsRouteImport } from './routes/api.v2.torrents.setShareLimits'
+import { Route as ApiV2TorrentsSetForceStartRouteImport } from './routes/api.v2.torrents.setForceStart'
 import { Route as ApiV2TorrentsSetCategoryRouteImport } from './routes/api.v2.torrents.setCategory'
 import { Route as ApiV2TorrentsResumeRouteImport } from './routes/api.v2.torrents.resume'
+import { Route as ApiV2TorrentsPropertiesRouteImport } from './routes/api.v2.torrents.properties'
 import { Route as ApiV2TorrentsPauseRouteImport } from './routes/api.v2.torrents.pause'
 import { Route as ApiV2TorrentsInfoRouteImport } from './routes/api.v2.torrents.info'
 import { Route as ApiV2TorrentsFilesRouteImport } from './routes/api.v2.torrents.files'
+import { Route as ApiV2TorrentsFilePrioRouteImport } from './routes/api.v2.torrents.filePrio'
 import { Route as ApiV2TorrentsDeleteCategoryRouteImport } from './routes/api.v2.torrents.deleteCategory'
 import { Route as ApiV2TorrentsDeleteRouteImport } from './routes/api.v2.torrents.delete'
 import { Route as ApiV2TorrentsCreateCategoryRouteImport } from './routes/api.v2.torrents.createCategory'
 import { Route as ApiV2TorrentsCategoriesRouteImport } from './routes/api.v2.torrents.categories'
+import { Route as ApiV2TorrentsAddTagsRouteImport } from './routes/api.v2.torrents.addTags'
 import { Route as ApiV2TorrentsAddRouteImport } from './routes/api.v2.torrents.add'
 import { Route as ApiV2SyncMaindataRouteImport } from './routes/api.v2.sync.maindata'
+import { Route as ApiV2AuthLogoutRouteImport } from './routes/api.v2.auth.logout'
+import { Route as ApiV2AuthLoginRouteImport } from './routes/api.v2.auth.login'
 import { Route as ApiV2AppWebapiVersionRouteImport } from './routes/api.v2.app.webapiVersion'
+import { Route as ApiV2AppVersionRouteImport } from './routes/api.v2.app.version'
+import { Route as ApiV2AppSetPreferencesRouteImport } from './routes/api.v2.app.setPreferences'
 import { Route as ApiV2AppPreferencesRouteImport } from './routes/api.v2.app.preferences'
 
 const HealthRoute = HealthRouteImport.update({
@@ -43,6 +55,22 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiV2TransferSpeedLimitsModeRoute =
+  ApiV2TransferSpeedLimitsModeRouteImport.update({
+    id: '/v2/transfer/speedLimitsMode',
+    path: '/v2/transfer/speedLimitsMode',
+    getParentRoute: () => ApiRoute,
+  } as any)
+const ApiV2TorrentsTrackersRoute = ApiV2TorrentsTrackersRouteImport.update({
+  id: '/v2/torrents/trackers',
+  path: '/v2/torrents/trackers',
+  getParentRoute: () => ApiRoute,
+} as any)
+const ApiV2TorrentsTopPrioRoute = ApiV2TorrentsTopPrioRouteImport.update({
+  id: '/v2/torrents/topPrio',
+  path: '/v2/torrents/topPrio',
+  getParentRoute: () => ApiRoute,
+} as any)
 const ApiV2TorrentsStopRoute = ApiV2TorrentsStopRouteImport.update({
   id: '/v2/torrents/stop',
   path: '/v2/torrents/stop',
@@ -53,6 +81,18 @@ const ApiV2TorrentsStartRoute = ApiV2TorrentsStartRouteImport.update({
   path: '/v2/torrents/start',
   getParentRoute: () => ApiRoute,
 } as any)
+const ApiV2TorrentsSetShareLimitsRoute =
+  ApiV2TorrentsSetShareLimitsRouteImport.update({
+    id: '/v2/torrents/setShareLimits',
+    path: '/v2/torrents/setShareLimits',
+    getParentRoute: () => ApiRoute,
+  } as any)
+const ApiV2TorrentsSetForceStartRoute =
+  ApiV2TorrentsSetForceStartRouteImport.update({
+    id: '/v2/torrents/setForceStart',
+    path: '/v2/torrents/setForceStart',
+    getParentRoute: () => ApiRoute,
+  } as any)
 const ApiV2TorrentsSetCategoryRoute =
   ApiV2TorrentsSetCategoryRouteImport.update({
     id: '/v2/torrents/setCategory',
@@ -62,6 +102,11 @@ const ApiV2TorrentsSetCategoryRoute =
 const ApiV2TorrentsResumeRoute = ApiV2TorrentsResumeRouteImport.update({
   id: '/v2/torrents/resume',
   path: '/v2/torrents/resume',
+  getParentRoute: () => ApiRoute,
+} as any)
+const ApiV2TorrentsPropertiesRoute = ApiV2TorrentsPropertiesRouteImport.update({
+  id: '/v2/torrents/properties',
+  path: '/v2/torrents/properties',
   getParentRoute: () => ApiRoute,
 } as any)
 const ApiV2TorrentsPauseRoute = ApiV2TorrentsPauseRouteImport.update({
@@ -77,6 +122,11 @@ const ApiV2TorrentsInfoRoute = ApiV2TorrentsInfoRouteImport.update({
 const ApiV2TorrentsFilesRoute = ApiV2TorrentsFilesRouteImport.update({
   id: '/v2/torrents/files',
   path: '/v2/torrents/files',
+  getParentRoute: () => ApiRoute,
+} as any)
+const ApiV2TorrentsFilePrioRoute = ApiV2TorrentsFilePrioRouteImport.update({
+  id: '/v2/torrents/filePrio',
+  path: '/v2/torrents/filePrio',
   getParentRoute: () => ApiRoute,
 } as any)
 const ApiV2TorrentsDeleteCategoryRoute =
@@ -101,6 +151,11 @@ const ApiV2TorrentsCategoriesRoute = ApiV2TorrentsCategoriesRouteImport.update({
   path: '/v2/torrents/categories',
   getParentRoute: () => ApiRoute,
 } as any)
+const ApiV2TorrentsAddTagsRoute = ApiV2TorrentsAddTagsRouteImport.update({
+  id: '/v2/torrents/addTags',
+  path: '/v2/torrents/addTags',
+  getParentRoute: () => ApiRoute,
+} as any)
 const ApiV2TorrentsAddRoute = ApiV2TorrentsAddRouteImport.update({
   id: '/v2/torrents/add',
   path: '/v2/torrents/add',
@@ -111,9 +166,29 @@ const ApiV2SyncMaindataRoute = ApiV2SyncMaindataRouteImport.update({
   path: '/v2/sync/maindata',
   getParentRoute: () => ApiRoute,
 } as any)
+const ApiV2AuthLogoutRoute = ApiV2AuthLogoutRouteImport.update({
+  id: '/v2/auth/logout',
+  path: '/v2/auth/logout',
+  getParentRoute: () => ApiRoute,
+} as any)
+const ApiV2AuthLoginRoute = ApiV2AuthLoginRouteImport.update({
+  id: '/v2/auth/login',
+  path: '/v2/auth/login',
+  getParentRoute: () => ApiRoute,
+} as any)
 const ApiV2AppWebapiVersionRoute = ApiV2AppWebapiVersionRouteImport.update({
   id: '/v2/app/webapiVersion',
   path: '/v2/app/webapiVersion',
+  getParentRoute: () => ApiRoute,
+} as any)
+const ApiV2AppVersionRoute = ApiV2AppVersionRouteImport.update({
+  id: '/v2/app/version',
+  path: '/v2/app/version',
+  getParentRoute: () => ApiRoute,
+} as any)
+const ApiV2AppSetPreferencesRoute = ApiV2AppSetPreferencesRouteImport.update({
+  id: '/v2/app/setPreferences',
+  path: '/v2/app/setPreferences',
   getParentRoute: () => ApiRoute,
 } as any)
 const ApiV2AppPreferencesRoute = ApiV2AppPreferencesRouteImport.update({
@@ -127,40 +202,64 @@ export interface FileRoutesByFullPath {
   '/api': typeof ApiRouteWithChildren
   '/health': typeof HealthRoute
   '/api/v2/app/preferences': typeof ApiV2AppPreferencesRoute
+  '/api/v2/app/setPreferences': typeof ApiV2AppSetPreferencesRoute
+  '/api/v2/app/version': typeof ApiV2AppVersionRoute
   '/api/v2/app/webapiVersion': typeof ApiV2AppWebapiVersionRoute
+  '/api/v2/auth/login': typeof ApiV2AuthLoginRoute
+  '/api/v2/auth/logout': typeof ApiV2AuthLogoutRoute
   '/api/v2/sync/maindata': typeof ApiV2SyncMaindataRoute
   '/api/v2/torrents/add': typeof ApiV2TorrentsAddRoute
+  '/api/v2/torrents/addTags': typeof ApiV2TorrentsAddTagsRoute
   '/api/v2/torrents/categories': typeof ApiV2TorrentsCategoriesRoute
   '/api/v2/torrents/createCategory': typeof ApiV2TorrentsCreateCategoryRoute
   '/api/v2/torrents/delete': typeof ApiV2TorrentsDeleteRoute
   '/api/v2/torrents/deleteCategory': typeof ApiV2TorrentsDeleteCategoryRoute
+  '/api/v2/torrents/filePrio': typeof ApiV2TorrentsFilePrioRoute
   '/api/v2/torrents/files': typeof ApiV2TorrentsFilesRoute
   '/api/v2/torrents/info': typeof ApiV2TorrentsInfoRoute
   '/api/v2/torrents/pause': typeof ApiV2TorrentsPauseRoute
+  '/api/v2/torrents/properties': typeof ApiV2TorrentsPropertiesRoute
   '/api/v2/torrents/resume': typeof ApiV2TorrentsResumeRoute
   '/api/v2/torrents/setCategory': typeof ApiV2TorrentsSetCategoryRoute
+  '/api/v2/torrents/setForceStart': typeof ApiV2TorrentsSetForceStartRoute
+  '/api/v2/torrents/setShareLimits': typeof ApiV2TorrentsSetShareLimitsRoute
   '/api/v2/torrents/start': typeof ApiV2TorrentsStartRoute
   '/api/v2/torrents/stop': typeof ApiV2TorrentsStopRoute
+  '/api/v2/torrents/topPrio': typeof ApiV2TorrentsTopPrioRoute
+  '/api/v2/torrents/trackers': typeof ApiV2TorrentsTrackersRoute
+  '/api/v2/transfer/speedLimitsMode': typeof ApiV2TransferSpeedLimitsModeRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/api': typeof ApiRouteWithChildren
   '/health': typeof HealthRoute
   '/api/v2/app/preferences': typeof ApiV2AppPreferencesRoute
+  '/api/v2/app/setPreferences': typeof ApiV2AppSetPreferencesRoute
+  '/api/v2/app/version': typeof ApiV2AppVersionRoute
   '/api/v2/app/webapiVersion': typeof ApiV2AppWebapiVersionRoute
+  '/api/v2/auth/login': typeof ApiV2AuthLoginRoute
+  '/api/v2/auth/logout': typeof ApiV2AuthLogoutRoute
   '/api/v2/sync/maindata': typeof ApiV2SyncMaindataRoute
   '/api/v2/torrents/add': typeof ApiV2TorrentsAddRoute
+  '/api/v2/torrents/addTags': typeof ApiV2TorrentsAddTagsRoute
   '/api/v2/torrents/categories': typeof ApiV2TorrentsCategoriesRoute
   '/api/v2/torrents/createCategory': typeof ApiV2TorrentsCreateCategoryRoute
   '/api/v2/torrents/delete': typeof ApiV2TorrentsDeleteRoute
   '/api/v2/torrents/deleteCategory': typeof ApiV2TorrentsDeleteCategoryRoute
+  '/api/v2/torrents/filePrio': typeof ApiV2TorrentsFilePrioRoute
   '/api/v2/torrents/files': typeof ApiV2TorrentsFilesRoute
   '/api/v2/torrents/info': typeof ApiV2TorrentsInfoRoute
   '/api/v2/torrents/pause': typeof ApiV2TorrentsPauseRoute
+  '/api/v2/torrents/properties': typeof ApiV2TorrentsPropertiesRoute
   '/api/v2/torrents/resume': typeof ApiV2TorrentsResumeRoute
   '/api/v2/torrents/setCategory': typeof ApiV2TorrentsSetCategoryRoute
+  '/api/v2/torrents/setForceStart': typeof ApiV2TorrentsSetForceStartRoute
+  '/api/v2/torrents/setShareLimits': typeof ApiV2TorrentsSetShareLimitsRoute
   '/api/v2/torrents/start': typeof ApiV2TorrentsStartRoute
   '/api/v2/torrents/stop': typeof ApiV2TorrentsStopRoute
+  '/api/v2/torrents/topPrio': typeof ApiV2TorrentsTopPrioRoute
+  '/api/v2/torrents/trackers': typeof ApiV2TorrentsTrackersRoute
+  '/api/v2/transfer/speedLimitsMode': typeof ApiV2TransferSpeedLimitsModeRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -168,20 +267,32 @@ export interface FileRoutesById {
   '/api': typeof ApiRouteWithChildren
   '/health': typeof HealthRoute
   '/api/v2/app/preferences': typeof ApiV2AppPreferencesRoute
+  '/api/v2/app/setPreferences': typeof ApiV2AppSetPreferencesRoute
+  '/api/v2/app/version': typeof ApiV2AppVersionRoute
   '/api/v2/app/webapiVersion': typeof ApiV2AppWebapiVersionRoute
+  '/api/v2/auth/login': typeof ApiV2AuthLoginRoute
+  '/api/v2/auth/logout': typeof ApiV2AuthLogoutRoute
   '/api/v2/sync/maindata': typeof ApiV2SyncMaindataRoute
   '/api/v2/torrents/add': typeof ApiV2TorrentsAddRoute
+  '/api/v2/torrents/addTags': typeof ApiV2TorrentsAddTagsRoute
   '/api/v2/torrents/categories': typeof ApiV2TorrentsCategoriesRoute
   '/api/v2/torrents/createCategory': typeof ApiV2TorrentsCreateCategoryRoute
   '/api/v2/torrents/delete': typeof ApiV2TorrentsDeleteRoute
   '/api/v2/torrents/deleteCategory': typeof ApiV2TorrentsDeleteCategoryRoute
+  '/api/v2/torrents/filePrio': typeof ApiV2TorrentsFilePrioRoute
   '/api/v2/torrents/files': typeof ApiV2TorrentsFilesRoute
   '/api/v2/torrents/info': typeof ApiV2TorrentsInfoRoute
   '/api/v2/torrents/pause': typeof ApiV2TorrentsPauseRoute
+  '/api/v2/torrents/properties': typeof ApiV2TorrentsPropertiesRoute
   '/api/v2/torrents/resume': typeof ApiV2TorrentsResumeRoute
   '/api/v2/torrents/setCategory': typeof ApiV2TorrentsSetCategoryRoute
+  '/api/v2/torrents/setForceStart': typeof ApiV2TorrentsSetForceStartRoute
+  '/api/v2/torrents/setShareLimits': typeof ApiV2TorrentsSetShareLimitsRoute
   '/api/v2/torrents/start': typeof ApiV2TorrentsStartRoute
   '/api/v2/torrents/stop': typeof ApiV2TorrentsStopRoute
+  '/api/v2/torrents/topPrio': typeof ApiV2TorrentsTopPrioRoute
+  '/api/v2/torrents/trackers': typeof ApiV2TorrentsTrackersRoute
+  '/api/v2/transfer/speedLimitsMode': typeof ApiV2TransferSpeedLimitsModeRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -190,60 +301,96 @@ export interface FileRouteTypes {
     | '/api'
     | '/health'
     | '/api/v2/app/preferences'
+    | '/api/v2/app/setPreferences'
+    | '/api/v2/app/version'
     | '/api/v2/app/webapiVersion'
+    | '/api/v2/auth/login'
+    | '/api/v2/auth/logout'
     | '/api/v2/sync/maindata'
     | '/api/v2/torrents/add'
+    | '/api/v2/torrents/addTags'
     | '/api/v2/torrents/categories'
     | '/api/v2/torrents/createCategory'
     | '/api/v2/torrents/delete'
     | '/api/v2/torrents/deleteCategory'
+    | '/api/v2/torrents/filePrio'
     | '/api/v2/torrents/files'
     | '/api/v2/torrents/info'
     | '/api/v2/torrents/pause'
+    | '/api/v2/torrents/properties'
     | '/api/v2/torrents/resume'
     | '/api/v2/torrents/setCategory'
+    | '/api/v2/torrents/setForceStart'
+    | '/api/v2/torrents/setShareLimits'
     | '/api/v2/torrents/start'
     | '/api/v2/torrents/stop'
+    | '/api/v2/torrents/topPrio'
+    | '/api/v2/torrents/trackers'
+    | '/api/v2/transfer/speedLimitsMode'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/api'
     | '/health'
     | '/api/v2/app/preferences'
+    | '/api/v2/app/setPreferences'
+    | '/api/v2/app/version'
     | '/api/v2/app/webapiVersion'
+    | '/api/v2/auth/login'
+    | '/api/v2/auth/logout'
     | '/api/v2/sync/maindata'
     | '/api/v2/torrents/add'
+    | '/api/v2/torrents/addTags'
     | '/api/v2/torrents/categories'
     | '/api/v2/torrents/createCategory'
     | '/api/v2/torrents/delete'
     | '/api/v2/torrents/deleteCategory'
+    | '/api/v2/torrents/filePrio'
     | '/api/v2/torrents/files'
     | '/api/v2/torrents/info'
     | '/api/v2/torrents/pause'
+    | '/api/v2/torrents/properties'
     | '/api/v2/torrents/resume'
     | '/api/v2/torrents/setCategory'
+    | '/api/v2/torrents/setForceStart'
+    | '/api/v2/torrents/setShareLimits'
     | '/api/v2/torrents/start'
     | '/api/v2/torrents/stop'
+    | '/api/v2/torrents/topPrio'
+    | '/api/v2/torrents/trackers'
+    | '/api/v2/transfer/speedLimitsMode'
   id:
     | '__root__'
     | '/'
     | '/api'
     | '/health'
     | '/api/v2/app/preferences'
+    | '/api/v2/app/setPreferences'
+    | '/api/v2/app/version'
     | '/api/v2/app/webapiVersion'
+    | '/api/v2/auth/login'
+    | '/api/v2/auth/logout'
     | '/api/v2/sync/maindata'
     | '/api/v2/torrents/add'
+    | '/api/v2/torrents/addTags'
     | '/api/v2/torrents/categories'
     | '/api/v2/torrents/createCategory'
     | '/api/v2/torrents/delete'
     | '/api/v2/torrents/deleteCategory'
+    | '/api/v2/torrents/filePrio'
     | '/api/v2/torrents/files'
     | '/api/v2/torrents/info'
     | '/api/v2/torrents/pause'
+    | '/api/v2/torrents/properties'
     | '/api/v2/torrents/resume'
     | '/api/v2/torrents/setCategory'
+    | '/api/v2/torrents/setForceStart'
+    | '/api/v2/torrents/setShareLimits'
     | '/api/v2/torrents/start'
     | '/api/v2/torrents/stop'
+    | '/api/v2/torrents/topPrio'
+    | '/api/v2/torrents/trackers'
+    | '/api/v2/transfer/speedLimitsMode'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -275,6 +422,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/v2/transfer/speedLimitsMode': {
+      id: '/api/v2/transfer/speedLimitsMode'
+      path: '/v2/transfer/speedLimitsMode'
+      fullPath: '/api/v2/transfer/speedLimitsMode'
+      preLoaderRoute: typeof ApiV2TransferSpeedLimitsModeRouteImport
+      parentRoute: typeof ApiRoute
+    }
+    '/api/v2/torrents/trackers': {
+      id: '/api/v2/torrents/trackers'
+      path: '/v2/torrents/trackers'
+      fullPath: '/api/v2/torrents/trackers'
+      preLoaderRoute: typeof ApiV2TorrentsTrackersRouteImport
+      parentRoute: typeof ApiRoute
+    }
+    '/api/v2/torrents/topPrio': {
+      id: '/api/v2/torrents/topPrio'
+      path: '/v2/torrents/topPrio'
+      fullPath: '/api/v2/torrents/topPrio'
+      preLoaderRoute: typeof ApiV2TorrentsTopPrioRouteImport
+      parentRoute: typeof ApiRoute
+    }
     '/api/v2/torrents/stop': {
       id: '/api/v2/torrents/stop'
       path: '/v2/torrents/stop'
@@ -289,6 +457,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiV2TorrentsStartRouteImport
       parentRoute: typeof ApiRoute
     }
+    '/api/v2/torrents/setShareLimits': {
+      id: '/api/v2/torrents/setShareLimits'
+      path: '/v2/torrents/setShareLimits'
+      fullPath: '/api/v2/torrents/setShareLimits'
+      preLoaderRoute: typeof ApiV2TorrentsSetShareLimitsRouteImport
+      parentRoute: typeof ApiRoute
+    }
+    '/api/v2/torrents/setForceStart': {
+      id: '/api/v2/torrents/setForceStart'
+      path: '/v2/torrents/setForceStart'
+      fullPath: '/api/v2/torrents/setForceStart'
+      preLoaderRoute: typeof ApiV2TorrentsSetForceStartRouteImport
+      parentRoute: typeof ApiRoute
+    }
     '/api/v2/torrents/setCategory': {
       id: '/api/v2/torrents/setCategory'
       path: '/v2/torrents/setCategory'
@@ -301,6 +483,13 @@ declare module '@tanstack/react-router' {
       path: '/v2/torrents/resume'
       fullPath: '/api/v2/torrents/resume'
       preLoaderRoute: typeof ApiV2TorrentsResumeRouteImport
+      parentRoute: typeof ApiRoute
+    }
+    '/api/v2/torrents/properties': {
+      id: '/api/v2/torrents/properties'
+      path: '/v2/torrents/properties'
+      fullPath: '/api/v2/torrents/properties'
+      preLoaderRoute: typeof ApiV2TorrentsPropertiesRouteImport
       parentRoute: typeof ApiRoute
     }
     '/api/v2/torrents/pause': {
@@ -322,6 +511,13 @@ declare module '@tanstack/react-router' {
       path: '/v2/torrents/files'
       fullPath: '/api/v2/torrents/files'
       preLoaderRoute: typeof ApiV2TorrentsFilesRouteImport
+      parentRoute: typeof ApiRoute
+    }
+    '/api/v2/torrents/filePrio': {
+      id: '/api/v2/torrents/filePrio'
+      path: '/v2/torrents/filePrio'
+      fullPath: '/api/v2/torrents/filePrio'
+      preLoaderRoute: typeof ApiV2TorrentsFilePrioRouteImport
       parentRoute: typeof ApiRoute
     }
     '/api/v2/torrents/deleteCategory': {
@@ -352,6 +548,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiV2TorrentsCategoriesRouteImport
       parentRoute: typeof ApiRoute
     }
+    '/api/v2/torrents/addTags': {
+      id: '/api/v2/torrents/addTags'
+      path: '/v2/torrents/addTags'
+      fullPath: '/api/v2/torrents/addTags'
+      preLoaderRoute: typeof ApiV2TorrentsAddTagsRouteImport
+      parentRoute: typeof ApiRoute
+    }
     '/api/v2/torrents/add': {
       id: '/api/v2/torrents/add'
       path: '/v2/torrents/add'
@@ -366,11 +569,39 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiV2SyncMaindataRouteImport
       parentRoute: typeof ApiRoute
     }
+    '/api/v2/auth/logout': {
+      id: '/api/v2/auth/logout'
+      path: '/v2/auth/logout'
+      fullPath: '/api/v2/auth/logout'
+      preLoaderRoute: typeof ApiV2AuthLogoutRouteImport
+      parentRoute: typeof ApiRoute
+    }
+    '/api/v2/auth/login': {
+      id: '/api/v2/auth/login'
+      path: '/v2/auth/login'
+      fullPath: '/api/v2/auth/login'
+      preLoaderRoute: typeof ApiV2AuthLoginRouteImport
+      parentRoute: typeof ApiRoute
+    }
     '/api/v2/app/webapiVersion': {
       id: '/api/v2/app/webapiVersion'
       path: '/v2/app/webapiVersion'
       fullPath: '/api/v2/app/webapiVersion'
       preLoaderRoute: typeof ApiV2AppWebapiVersionRouteImport
+      parentRoute: typeof ApiRoute
+    }
+    '/api/v2/app/version': {
+      id: '/api/v2/app/version'
+      path: '/v2/app/version'
+      fullPath: '/api/v2/app/version'
+      preLoaderRoute: typeof ApiV2AppVersionRouteImport
+      parentRoute: typeof ApiRoute
+    }
+    '/api/v2/app/setPreferences': {
+      id: '/api/v2/app/setPreferences'
+      path: '/v2/app/setPreferences'
+      fullPath: '/api/v2/app/setPreferences'
+      preLoaderRoute: typeof ApiV2AppSetPreferencesRouteImport
       parentRoute: typeof ApiRoute
     }
     '/api/v2/app/preferences': {
@@ -385,38 +616,62 @@ declare module '@tanstack/react-router' {
 
 interface ApiRouteChildren {
   ApiV2AppPreferencesRoute: typeof ApiV2AppPreferencesRoute
+  ApiV2AppSetPreferencesRoute: typeof ApiV2AppSetPreferencesRoute
+  ApiV2AppVersionRoute: typeof ApiV2AppVersionRoute
   ApiV2AppWebapiVersionRoute: typeof ApiV2AppWebapiVersionRoute
+  ApiV2AuthLoginRoute: typeof ApiV2AuthLoginRoute
+  ApiV2AuthLogoutRoute: typeof ApiV2AuthLogoutRoute
   ApiV2SyncMaindataRoute: typeof ApiV2SyncMaindataRoute
   ApiV2TorrentsAddRoute: typeof ApiV2TorrentsAddRoute
+  ApiV2TorrentsAddTagsRoute: typeof ApiV2TorrentsAddTagsRoute
   ApiV2TorrentsCategoriesRoute: typeof ApiV2TorrentsCategoriesRoute
   ApiV2TorrentsCreateCategoryRoute: typeof ApiV2TorrentsCreateCategoryRoute
   ApiV2TorrentsDeleteRoute: typeof ApiV2TorrentsDeleteRoute
   ApiV2TorrentsDeleteCategoryRoute: typeof ApiV2TorrentsDeleteCategoryRoute
+  ApiV2TorrentsFilePrioRoute: typeof ApiV2TorrentsFilePrioRoute
   ApiV2TorrentsFilesRoute: typeof ApiV2TorrentsFilesRoute
   ApiV2TorrentsInfoRoute: typeof ApiV2TorrentsInfoRoute
   ApiV2TorrentsPauseRoute: typeof ApiV2TorrentsPauseRoute
+  ApiV2TorrentsPropertiesRoute: typeof ApiV2TorrentsPropertiesRoute
   ApiV2TorrentsResumeRoute: typeof ApiV2TorrentsResumeRoute
   ApiV2TorrentsSetCategoryRoute: typeof ApiV2TorrentsSetCategoryRoute
+  ApiV2TorrentsSetForceStartRoute: typeof ApiV2TorrentsSetForceStartRoute
+  ApiV2TorrentsSetShareLimitsRoute: typeof ApiV2TorrentsSetShareLimitsRoute
   ApiV2TorrentsStartRoute: typeof ApiV2TorrentsStartRoute
   ApiV2TorrentsStopRoute: typeof ApiV2TorrentsStopRoute
+  ApiV2TorrentsTopPrioRoute: typeof ApiV2TorrentsTopPrioRoute
+  ApiV2TorrentsTrackersRoute: typeof ApiV2TorrentsTrackersRoute
+  ApiV2TransferSpeedLimitsModeRoute: typeof ApiV2TransferSpeedLimitsModeRoute
 }
 
 const ApiRouteChildren: ApiRouteChildren = {
   ApiV2AppPreferencesRoute: ApiV2AppPreferencesRoute,
+  ApiV2AppSetPreferencesRoute: ApiV2AppSetPreferencesRoute,
+  ApiV2AppVersionRoute: ApiV2AppVersionRoute,
   ApiV2AppWebapiVersionRoute: ApiV2AppWebapiVersionRoute,
+  ApiV2AuthLoginRoute: ApiV2AuthLoginRoute,
+  ApiV2AuthLogoutRoute: ApiV2AuthLogoutRoute,
   ApiV2SyncMaindataRoute: ApiV2SyncMaindataRoute,
   ApiV2TorrentsAddRoute: ApiV2TorrentsAddRoute,
+  ApiV2TorrentsAddTagsRoute: ApiV2TorrentsAddTagsRoute,
   ApiV2TorrentsCategoriesRoute: ApiV2TorrentsCategoriesRoute,
   ApiV2TorrentsCreateCategoryRoute: ApiV2TorrentsCreateCategoryRoute,
   ApiV2TorrentsDeleteRoute: ApiV2TorrentsDeleteRoute,
   ApiV2TorrentsDeleteCategoryRoute: ApiV2TorrentsDeleteCategoryRoute,
+  ApiV2TorrentsFilePrioRoute: ApiV2TorrentsFilePrioRoute,
   ApiV2TorrentsFilesRoute: ApiV2TorrentsFilesRoute,
   ApiV2TorrentsInfoRoute: ApiV2TorrentsInfoRoute,
   ApiV2TorrentsPauseRoute: ApiV2TorrentsPauseRoute,
+  ApiV2TorrentsPropertiesRoute: ApiV2TorrentsPropertiesRoute,
   ApiV2TorrentsResumeRoute: ApiV2TorrentsResumeRoute,
   ApiV2TorrentsSetCategoryRoute: ApiV2TorrentsSetCategoryRoute,
+  ApiV2TorrentsSetForceStartRoute: ApiV2TorrentsSetForceStartRoute,
+  ApiV2TorrentsSetShareLimitsRoute: ApiV2TorrentsSetShareLimitsRoute,
   ApiV2TorrentsStartRoute: ApiV2TorrentsStartRoute,
   ApiV2TorrentsStopRoute: ApiV2TorrentsStopRoute,
+  ApiV2TorrentsTopPrioRoute: ApiV2TorrentsTopPrioRoute,
+  ApiV2TorrentsTrackersRoute: ApiV2TorrentsTrackersRoute,
+  ApiV2TransferSpeedLimitsModeRoute: ApiV2TransferSpeedLimitsModeRoute,
 }
 
 const ApiRouteWithChildren = ApiRoute._addFileChildren(ApiRouteChildren)
@@ -429,13 +684,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}

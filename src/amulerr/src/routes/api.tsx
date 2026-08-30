@@ -1,21 +1,24 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { searchAll } from '#/amule';
-import { emptyResponse, fakeItem, group, itemsResponse } from '#/lib/indexer';
-import { skipFalsy } from '#/lib/array';
+import { searchAll } from '#/amule'
+import { emptyResponse, fakeItem, group, itemsResponse } from '#/lib/indexer'
+import { skipFalsy } from '#/lib/array'
 
 export const Route = createFileRoute('/api')({
   server: {
     handlers: {
       GET: async ({ request }) => {
         const content = await handleTorznabRequest(request)
-        return new Response(`<?xml version="1.0" encoding="UTF-8" ?>${content}`, {
-          status: 200,
-          headers: {
-            "Content-Type": "application/xml",
-            "X-Content-Type-Options": "nosniff",
-            "Cache-Control": "public, max-age=0",
+        return new Response(
+          `<?xml version="1.0" encoding="UTF-8" ?>${content}`,
+          {
+            status: 200,
+            headers: {
+              'Content-Type': 'application/xml',
+              'X-Content-Type-Options': 'nosniff',
+              'Cache-Control': 'public, max-age=0',
+            },
           },
-        })
+        )
       },
     },
   },
@@ -24,15 +27,20 @@ export const Route = createFileRoute('/api')({
 async function handleTorznabRequest(request: Request) {
   const url = new URL(request.url)
 
-  switch (url.searchParams.get("t")) {
-    case "caps":
+  switch (url.searchParams.get('t')) {
+    case 'caps':
       return caps(url)
-    case "search":
+    case 'search':
       return await rawSearch(url)
-    case "tvsearch":
+    case 'tvsearch':
       return await tvSearch(url)
     default:
-      throw Error("NOT IMPLEMENTED")
+      // Per the Torznab spec, an unsupported/unrecognized `t` must return an
+      // empty result set, not an error — Sonarr/Radarr's RssParser.PreProcess
+      // treats a non-XML, non-200 response as "site is likely blocked or
+      // unavailable" and surfaces that misleading error instead of the real
+      // cause if we throw here.
+      return emptyResponse('0')
   }
 }
 
@@ -61,17 +69,17 @@ function caps(_url: URL) {
 }
 
 async function rawSearch(url: URL) {
-  const q = url.searchParams.get("q")
-  const offset = url.searchParams.get("offset")
+  const q = url.searchParams.get('q')
+  const offset = url.searchParams.get('offset')
   const cat =
     url.searchParams
-      .get("cat")
+      .get('cat')
       ?.toString()
-      ?.split(",")
-      ?.map((x) => parseInt(x)) ?? []
+      .split(',')
+      .map((x) => parseInt(x)) ?? []
 
   // avoid duplicated entries
-  if (offset && offset !== "0") {
+  if (offset && offset !== '0') {
     return emptyResponse(offset)
   }
 
@@ -84,21 +92,20 @@ async function rawSearch(url: URL) {
   return itemsResponse(searchResults, cat)
 }
 
-
 async function tvSearch(url: URL) {
-  const q = url.searchParams.get("q")
-  const season = url.searchParams.get("season")?.toString()
-  const episode = url.searchParams.get("ep")?.toString()
-  const offset = url.searchParams.get("offset")?.toString()
+  const q = url.searchParams.get('q')
+  const season = url.searchParams.get('season')?.toString()
+  const episode = url.searchParams.get('ep')?.toString()
+  const offset = url.searchParams.get('offset')?.toString()
   const cat =
     url.searchParams
-      .get("cat")
+      .get('cat')
       ?.toString()
-      ?.split(",")
-      ?.map((x) => parseInt(x)) ?? []
+      .split(',')
+      .map((x) => parseInt(x)) ?? []
 
   // avoid duplicated entries
-  if (offset && offset !== "0") {
+  if (offset && offset !== '0') {
     return emptyResponse(offset)
   }
 
@@ -110,24 +117,24 @@ async function tvSearch(url: URL) {
   const episodeQuery = [
     ...new Set(
       season && episode
-        ? ["/", "-"].some((c) => episode.includes(c)) // daily episode
+        ? ['/', '-'].some((c) => episode.includes(c)) // daily episode
           ? [`${season}/${episode}`]
           : [
-            `${season}x${episode}`,
-            `${season}x${episode.padStart(2, "0")}`,
-            `S${season.padStart(2, "0")}E${episode.padStart(2, "0")}`,
-            `S${season}E${episode}`,
-          ]
+              `${season}x${episode}`,
+              `${season}x${episode.padStart(2, '0')}`,
+              `S${season.padStart(2, '0')}E${episode.padStart(2, '0')}`,
+              `S${season}E${episode}`,
+            ]
         : season
           ? season.length === 4 // daily episode
             ? [season]
-            : [`${season}x`, `S${season.padStart(2, "0")}`, `S${season}`]
-          : []
+            : [`${season}x`, `S${season.padStart(2, '0')}`, `S${season}`]
+          : [],
     ),
   ].filter(skipFalsy)
 
-  const episodeFilter = group(episodeQuery, "OR", true)
-  const query = group([q, episodeFilter], "AND", false)
+  const episodeFilter = group(episodeQuery, 'OR', true)
+  const query = group([q, episodeFilter], 'AND', false)
   const searchResults = await searchAll(query)
   return itemsResponse(searchResults, cat)
 }

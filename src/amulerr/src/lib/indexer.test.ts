@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { itemsResponse } from './indexer'
+import { toMagnetLink } from './links'
 
 const ED2K = 'A1B2C3D4E5F60718293A4B5C6D7E8F90'
 
@@ -29,9 +30,22 @@ describe('itemsResponse', () => {
       [7000],
     )
 
+    // The magnet's btih is base32 (per toMagnetLink / BEP-9), not the raw hex
+    // hash — derive the expected value the same way instead of hardcoding a
+    // guessed hex string that doesn't match the real encoding.
+    const expectedMagnet = toMagnetLink(ED2K, 'book.pdf', 100)
+
     expect(xml).toContain('<link>')
     expect(xml).toContain('<enclosure url=')
     expect(xml).toContain('torznab:attr name="magneturl"')
-    expect(xml).toContain('urn:btih:a1b2c3d4e5f60718293a4b5c6d7e8f9000000000')
+    expect(expectedMagnet).not.toBeNull()
+    const expectedBtih = expectedMagnet!.split('urn:btih:')[1].split('&')[0]
+    expect(xml).toContain(expectedBtih)
+
+    // ...but the infohash attr must be the 40 hex char form the *arr derives
+    // from that magnet after a grab, not the base32 btih.
+    expect(xml).toContain(
+      `torznab:attr name="infohash" value="${ED2K}00000000"`,
+    )
   })
 })
