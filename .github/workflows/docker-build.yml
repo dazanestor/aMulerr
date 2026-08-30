@@ -77,7 +77,8 @@ jobs:
         with:
           images: ghcr.io/${{ github.repository_owner }}/amulerr
           tags: |
-            type=raw,value=combined
+            type=raw,value=latest,enable=${{ github.ref_name == 'main' }}
+            type=raw,value=combined,enable=${{ github.ref_name == 'combined-auth-categories' }}
             type=sha,format=short
 
       - name: Build and push
