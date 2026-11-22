@@ -10,8 +10,26 @@ import {
   EC_TAG_TYPES,
   PROTOCOL_VERSION,
 } from './ECDefs.mjs'
+import {
+  AeadSession,
+  CIPHER_AES128_GCM,
+  CIPHER_CHACHA20_POLY1305,
+  NONCE_TAG_LEN,
+  SRP_CREDENTIAL_PASSWORD,
+  SRP_PROFILE,
+  SRP_WIDTH,
+  SrpClient,
+  buildTranscript,
+  generateX25519,
+  isCipherSupported,
+  x25519Agree,
+} from './ECCrypto.mjs'
+import { randomBytes } from 'crypto'
 
 const DEBUG = false
+
+// Packet flag: body is AEAD-sealed (ciphertext || 16-byte tag).
+const EC_FLAG_ENCRYPTED = 0x08
 
 class ECProtocol {
   constructor(host = HOST, port = PORT, password = PASSWORD, options = {}) {
@@ -33,11 +51,16 @@ class ECProtocol {
     // (e.g. Promise.all on the same client) would otherwise race on the shared "data"
     // listener and could resolve with a DIFFERENT request's response. Serialize here.
     this.sendMutex = new Mutex()
+    // AEAD transport session (aMule >= 3.3); null until the handshake derives keys.
+    this.crypt = null
+    this.cryptEstablished = false
   }
 
   async connect() {
     return new Promise((resolve, reject) => {
       this.socket = new Socket()
+      this.crypt = null
+      this.cryptEstablished = false
 
       const onError = (err) => reject(err)
       this.socket.once('error', onError)
@@ -207,6 +230,9 @@ class ECProtocol {
           // Port big-endian (network order)
           valueBuffer.writeUInt16BE(port, 4)
           break
+        case EC_TAG_TYPES.EC_TAGTYPE_CUSTOM:
+          valueBuffer = Buffer.from(value)
+          break
         case EC_TAG_TYPES.EC_TAGTYPE_HASH16:
           if (typeof value === 'string') {
             // Assumes hexadecimal string format.
@@ -259,14 +285,16 @@ class ECProtocol {
   buildPacket(opcode, tags) {
     // Transmission layer: 4 bytes flags (here fixed to 0x20)
     const flags = Buffer.alloc(4)
-    flags.writeUInt32BE(0x20, 0)
+    flags.writeUInt32BE(this.crypt ? 0x20 | EC_FLAG_ENCRYPTED : 0x20, 0)
 
     // Build application layer.
     const opcodeBuf = Buffer.from([opcode])
     const tagCountBuf = Buffer.alloc(2)
     tagCountBuf.writeUInt16BE(tags.length, 0)
     const tagsBuf = Buffer.concat(tags)
-    const appData = Buffer.concat([opcodeBuf, tagCountBuf, tagsBuf])
+    let appData = Buffer.concat([opcodeBuf, tagCountBuf, tagsBuf])
+    // Once the AEAD session is armed, the body is sealed (header stays clear).
+    if (this.crypt) appData = this.crypt.seal(appData)
 
     // Payload length (application data) is written as 4 bytes.
     const lengthBuf = Buffer.alloc(4)
@@ -338,8 +366,8 @@ class ECProtocol {
           cleanup()
           this.consecutiveTimeouts = 0 // Successful response — reset timeout counter
 
-          // Process the full packet
-          const parsed = this.parsePacket(buffer)
+          // Process the full packet (unsealing it first if needed)
+          const parsed = this.parsePacket(this.unsealPacket(buffer))
           if (DEBUG)
             console.log(
               'Received packet',
@@ -400,6 +428,27 @@ class ECProtocol {
         reject(err)
       }
     })
+  }
+
+  /*
+   * Open an AEAD-sealed packet, returning an equivalent clear packet.
+   * After authentication every packet must be sealed; during the handshake
+   * only the daemon's failure replies may come in clear.
+   */
+  unsealPacket(buffer) {
+    const flags = buffer.readUInt32BE(0)
+    const sealed = (flags & EC_FLAG_ENCRYPTED) !== 0
+    if (!sealed) {
+      if (this.crypt && this.cryptEstablished)
+        throw new Error('Cleartext packet on an encrypted session')
+      return buffer
+    }
+    if (!this.crypt) throw new Error('Encrypted packet before key setup')
+    const plain = this.crypt.open(buffer.subarray(8))
+    const header = Buffer.alloc(8)
+    header.writeUInt32BE((flags & ~EC_FLAG_ENCRYPTED) >>> 0, 0)
+    header.writeUInt32BE(plain.length, 4)
+    return Buffer.concat([header, plain])
   }
 
   // Reverse lookup helper
@@ -566,72 +615,114 @@ class ECProtocol {
    */
   async authenticate() {
     if (DEBUG) console.log('[ECProtocol] Authenticating...')
+    this.crypt = null
+    this.cryptEstablished = false
 
-    // Step 1: Build and send the AUTH_REQ packet.
-    const clientNameTag = this.createTag(
-      EC_TAGS.EC_TAG_CLIENT_NAME,
-      EC_TAG_TYPES.EC_TAGTYPE_STRING,
-      'amulerr',
-    )
-    const clientVerTag = this.createTag(
-      EC_TAGS.EC_TAG_CLIENT_VERSION,
-      EC_TAG_TYPES.EC_TAGTYPE_STRING,
-      '1.0',
-    )
-    const protocolVerTag = this.createTag(
-      EC_TAGS.EC_TAG_PROTOCOL_VERSION,
-      EC_TAG_TYPES.EC_TAGTYPE_UINT16,
-      PROTOCOL_VERSION.EC_CURRENT_PROTOCOL_VERSION,
-    )
+    // Step 1: AUTH_REQ (clear) with our SRP public value and AEAD offer.
+    const srp = new SrpClient()
+    const eph = generateX25519()
+    const clientNonce = randomBytes(NONCE_TAG_LEN)
+    const offered = [CIPHER_AES128_GCM, CIPHER_CHACHA20_POLY1305]
 
+    const custom = (tagId, value) =>
+      this.createTag(tagId, EC_TAG_TYPES.EC_TAGTYPE_CUSTOM, value)
     const saltResponse = await this.sendPacket(EC_OPCODES.EC_OP_AUTH_REQ, [
-      clientNameTag,
-      clientVerTag,
-      protocolVerTag,
+      this.createTag(
+        EC_TAGS.EC_TAG_CLIENT_NAME,
+        EC_TAG_TYPES.EC_TAGTYPE_STRING,
+        'amulerr',
+      ),
+      this.createTag(
+        EC_TAGS.EC_TAG_CLIENT_VERSION,
+        EC_TAG_TYPES.EC_TAGTYPE_STRING,
+        '1.0',
+      ),
+      this.createTag(
+        EC_TAGS.EC_TAG_PROTOCOL_VERSION,
+        EC_TAG_TYPES.EC_TAGTYPE_UINT16,
+        PROTOCOL_VERSION.EC_CURRENT_PROTOCOL_VERSION,
+      ),
+      custom(EC_TAGS.EC_TAG_CAN_AEAD, Buffer.from(offered)),
+      custom(EC_TAGS.EC_TAG_AEAD_CLIENT_NONCE, clientNonce),
+      custom(EC_TAGS.EC_TAG_AEAD_CLIENT_PUBKEY, eph.publicKey),
+      custom(EC_TAGS.EC_TAG_SRP_A, srp.A),
+      custom(
+        EC_TAGS.EC_TAG_SRP_CREDENTIAL,
+        Buffer.from([SRP_CREDENTIAL_PASSWORD]),
+      ),
     ])
 
-    // Step 2: Make sure we received the salt.
+    // Step 2: Make sure we received the SRP challenge.
     if (saltResponse.opcode !== EC_OPCODES.EC_OP_AUTH_SALT) {
       const reason = saltResponse.tags?.[0]?.humanValue || 'unknown reason'
       throw new Error(
         `Authentication failed at salt exchange (opcode: 0x${saltResponse.opcode.toString(16)}): ${reason}`,
       )
     }
-    const saltBuffer = saltResponse.tags[0].value
-    // aMule formats the salt as %lX (uppercase hex, no leading zeros) from a uint64.
-    // We must match: read as BigInt, convert to uppercase hex without leading zeros.
-    const saltValue = saltBuffer.readBigUInt64BE(0)
-    const hexSalt = saltValue.toString(16).toUpperCase()
-    //console.log("Received salt:", hexSalt);
+    const field = (tags, id, size) => {
+      const found = tags.filter((t) => t.tagId === id)
+      if (
+        found.length !== 1 ||
+        (size !== undefined && found[0].value.length !== size)
+      )
+        throw new Error(
+          `Missing or malformed AUTH_SALT field 0x${id.toString(16)}`,
+        )
+      return found[0]
+    }
+    const tags = saltResponse.tags
+    const B = field(tags, EC_TAGS.EC_TAG_SRP_B, SRP_WIDTH).value
+    const salt = field(tags, EC_TAGS.EC_TAG_SRP_SALT, 16).value
+    const profile = field(tags, EC_TAGS.EC_TAG_SRP_PROFILE, 4).value
+    if (!profile.equals(SRP_PROFILE)) throw new Error('Unsupported SRP profile')
+    const cipher = field(tags, EC_TAGS.EC_TAG_AEAD_CIPHER).humanValue
+    const serverNonce = field(
+      tags,
+      EC_TAGS.EC_TAG_AEAD_SERVER_NONCE,
+      NONCE_TAG_LEN,
+    ).value
+    const serverPub = field(tags, EC_TAGS.EC_TAG_AEAD_SERVER_PUBKEY, 32).value
+    if (!offered.includes(cipher) || !isCipherSupported(cipher))
+      throw new Error('Daemon chose an unsupported AEAD cipher')
 
-    // Step 3: Compute the password hash.
-    const hashedSalt = createHash('md5').update(hexSalt).digest('hex')
-    const hashedPass = createHash('md5').update(this.password).digest('hex')
-    const passwdHash = createHash('md5')
-      .update(hashedPass + hashedSalt)
-      .digest('hex')
-    //console.log("Computed password hash:", passwdHash);
-
-    // Step 4: Send the AUTH_PASSWD packet.
-    const passwdTag = this.createTag(
-      EC_TAGS.EC_TAG_PASSWD_HASH,
-      EC_TAG_TYPES.EC_TAGTYPE_HASH16,
-      passwdHash,
+    // Step 3: derive the session keys and the SRP proof over the transcript.
+    const shared = x25519Agree(eph.privateKey, serverPub)
+    const transcript = buildTranscript(
+      offered,
+      cipher,
+      clientNonce,
+      serverNonce,
+      eph.publicKey,
+      serverPub,
     )
+    const session = new AeadSession(
+      cipher,
+      shared,
+      serverNonce,
+      clientNonce,
+      transcript,
+    )
+    const digest = createHash('md5').update(this.password).digest()
+    const m1 = srp.respond(digest, SRP_CREDENTIAL_PASSWORD, salt, B, transcript)
 
+    // Step 4: AUTH_PASSWD is already sealed.
+    this.crypt = session
     const authReply = await this.sendPacket(EC_OPCODES.EC_OP_AUTH_PASSWD, [
-      passwdTag,
+      custom(EC_TAGS.EC_TAG_SRP_M1, m1),
     ])
 
-    // Step 5: Check the server's response.
-    if (authReply.opcode === EC_OPCODES.EC_OP_AUTH_OK) {
-      if (DEBUG) console.log('Authentication successful')
-    } else {
+    // Step 5: Check the server's response and its proof of the password.
+    if (authReply.opcode !== EC_OPCODES.EC_OP_AUTH_OK) {
       const reason = authReply.tags?.[0]?.humanValue || 'unknown reason'
       throw new Error(
         `Authentication failed (opcode: 0x${authReply.opcode.toString(16)}): ${reason}`,
       )
     }
+    const m2 = authReply.tags.find((t) => t.tagId === EC_TAGS.EC_TAG_SRP_M2)
+    if (!m2 || !srp.verify(m2.value))
+      throw new Error('Daemon failed to prove it knows the password')
+    this.cryptEstablished = true
+    if (DEBUG) console.log('Authentication successful')
   }
 }
 
