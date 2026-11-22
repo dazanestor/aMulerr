@@ -254,3 +254,7 @@ export class SrpClient {
     return ok
   }
 }
+
+/** aMule 3.0-3.2 key-confirmation tag: HKDF(secret, salt=transcript, info=label). */
+export const confirmTag = (secret, transcript, label) =>
+  Buffer.from(hkdfSync('sha256', secret, transcript, Buffer.from(label), 32))

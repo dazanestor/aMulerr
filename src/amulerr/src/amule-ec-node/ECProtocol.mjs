@@ -22,9 +22,10 @@ import {
   buildTranscript,
   generateX25519,
   isCipherSupported,
+  confirmTag,
   x25519Agree,
 } from './ECCrypto.mjs'
-import { randomBytes } from 'crypto'
+import { randomBytes, timingSafeEqual } from 'crypto'
 
 const DEBUG = false
 
@@ -54,6 +55,8 @@ class ECProtocol {
     // AEAD transport session (aMule >= 3.3); null until the handshake derives keys.
     this.crypt = null
     this.cryptEstablished = false
+    this.sendClearOnce = false
+    this.lastRxSealed = false
   }
 
   async connect() {
@@ -61,6 +64,7 @@ class ECProtocol {
       this.socket = new Socket()
       this.crypt = null
       this.cryptEstablished = false
+      this.sendClearOnce = false
 
       const onError = (err) => reject(err)
       this.socket.once('error', onError)
@@ -285,7 +289,9 @@ class ECProtocol {
   buildPacket(opcode, tags) {
     // Transmission layer: 4 bytes flags (here fixed to 0x20)
     const flags = Buffer.alloc(4)
-    flags.writeUInt32BE(this.crypt ? 0x20 | EC_FLAG_ENCRYPTED : 0x20, 0)
+    const seal = this.crypt && !this.sendClearOnce
+    this.sendClearOnce = false
+    flags.writeUInt32BE(seal ? 0x20 | EC_FLAG_ENCRYPTED : 0x20, 0)
 
     // Build application layer.
     const opcodeBuf = Buffer.from([opcode])
@@ -294,7 +300,7 @@ class ECProtocol {
     const tagsBuf = Buffer.concat(tags)
     let appData = Buffer.concat([opcodeBuf, tagCountBuf, tagsBuf])
     // Once the AEAD session is armed, the body is sealed (header stays clear).
-    if (this.crypt) appData = this.crypt.seal(appData)
+    if (seal) appData = this.crypt.seal(appData)
 
     // Payload length (application data) is written as 4 bytes.
     const lengthBuf = Buffer.alloc(4)
@@ -438,6 +444,7 @@ class ECProtocol {
   unsealPacket(buffer) {
     const flags = buffer.readUInt32BE(0)
     const sealed = (flags & EC_FLAG_ENCRYPTED) !== 0
+    this.lastRxSealed = sealed
     if (!sealed) {
       if (this.crypt && this.cryptEstablished)
         throw new Error('Cleartext packet on an encrypted session')
@@ -659,17 +666,21 @@ class ECProtocol {
         `Authentication failed at salt exchange (opcode: 0x${saltResponse.opcode.toString(16)}): ${reason}`,
       )
     }
-    const field = (tags, id, size) => {
-      const found = tags.filter((t) => t.tagId === id)
-      if (
-        found.length !== 1 ||
-        (size !== undefined && found[0].value.length !== size)
-      )
-        throw new Error(
-          `Missing or malformed AUTH_SALT field 0x${id.toString(16)}`,
-        )
-      return found[0]
+    // Pick the protocol from what the daemon answered:
+    //  - SRP_B present  -> aMule >= 3.3 (SRP-6a + AEAD)
+    //  - only AEAD tags -> aMule 3.0-3.2 (MD5 login inside an AEAD channel)
+    //  - neither        -> older daemon, clear MD5 login
+    const hasTag = (id) => saltResponse.tags.some((t) => t.tagId === id)
+    if (!hasTag(EC_TAGS.EC_TAG_SRP_B)) {
+      if (hasTag(EC_TAGS.EC_TAG_AEAD_CIPHER))
+        return this.authenticateAeadMd5(saltResponse, {
+          offered,
+          clientNonce,
+          eph,
+        })
+      return this.authenticateLegacy(saltResponse)
     }
+    const field = this.authField
     const tags = saltResponse.tags
     const B = field(tags, EC_TAGS.EC_TAG_SRP_B, SRP_WIDTH).value
     const salt = field(tags, EC_TAGS.EC_TAG_SRP_SALT, 16).value
@@ -723,6 +734,132 @@ class ECProtocol {
       throw new Error('Daemon failed to prove it knows the password')
     this.cryptEstablished = true
     if (DEBUG) console.log('Authentication successful')
+  }
+
+  authField(tags, id, size) {
+    const found = tags.filter((t) => t.tagId === id)
+    if (
+      found.length !== 1 ||
+      (size !== undefined && found[0].value.length !== size)
+    )
+      throw new Error(
+        `Missing or malformed AUTH_SALT field 0x${id.toString(16)}`,
+      )
+    return found[0]
+  }
+
+  /*
+   * aMule 3.0-3.2 login: X25519/AEAD channel, MD5 salted password hash and
+   * key confirmation tags. AUTH_PASSWD itself still travels in clear; every
+   * later packet is sealed.
+   */
+  async authenticateAeadMd5(saltResponse, { offered, clientNonce, eph }) {
+    const tags = saltResponse.tags
+    const field = this.authField
+    const cipher = field(tags, EC_TAGS.EC_TAG_AEAD_CIPHER).humanValue
+    const serverNonce = field(
+      tags,
+      EC_TAGS.EC_TAG_AEAD_SERVER_NONCE,
+      NONCE_TAG_LEN,
+    ).value
+    const serverPub = field(tags, EC_TAGS.EC_TAG_AEAD_SERVER_PUBKEY, 32).value
+    if (!offered.includes(cipher) || !isCipherSupported(cipher))
+      throw new Error('Daemon chose an unsupported AEAD cipher')
+
+    const shared = x25519Agree(eph.privateKey, serverPub)
+    const transcript = buildTranscript(
+      offered,
+      cipher,
+      clientNonce,
+      serverNonce,
+      eph.publicKey,
+      serverPub,
+    )
+    const session = new AeadSession(
+      cipher,
+      shared,
+      serverNonce,
+      clientNonce,
+      transcript,
+    )
+    // The credential is the lowercase hex MD5 of the password, as ASCII.
+    const secret = Buffer.from(
+      createHash('md5').update(this.password).digest('hex'),
+    )
+    const clientConfirm = confirmTag(secret, transcript, 'ec-confirm-client')
+    const expectedServer = confirmTag(secret, transcript, 'ec-confirm-server')
+
+    const passwdHash = this.legacyPasswdHash(saltResponse)
+    this.crypt = session
+    this.sendClearOnce = true // AUTH_PASSWD is the last clear packet
+    const authReply = await this.sendPacket(EC_OPCODES.EC_OP_AUTH_PASSWD, [
+      this.createTag(
+        EC_TAGS.EC_TAG_PASSWD_HASH,
+        EC_TAG_TYPES.EC_TAGTYPE_HASH16,
+        passwdHash,
+      ),
+      this.createTag(
+        EC_TAGS.EC_TAG_AEAD_CLIENT_CONFIRM,
+        EC_TAG_TYPES.EC_TAGTYPE_CUSTOM,
+        clientConfirm,
+      ),
+    ])
+    if (authReply.opcode !== EC_OPCODES.EC_OP_AUTH_OK) {
+      const reason = authReply.tags?.[0]?.humanValue || 'unknown reason'
+      throw new Error(
+        `Authentication failed (opcode: 0x${authReply.opcode.toString(16)}): ${reason}`,
+      )
+    }
+    const confirm = authReply.tags.find(
+      (t) => t.tagId === EC_TAGS.EC_TAG_AEAD_SERVER_CONFIRM,
+    )
+    if (
+      !this.lastRxSealed ||
+      !confirm ||
+      confirm.value.length !== expectedServer.length ||
+      !timingSafeEqual(confirm.value, expectedServer)
+    )
+      throw new Error('Daemon failed to prove it knows the password')
+    this.cryptEstablished = true
+    if (DEBUG) console.log('Authentication successful (AEAD + MD5)')
+  }
+
+  legacyPasswdHash(saltResponse) {
+    const saltTag =
+      saltResponse.tags.find((t) => t.tagId === EC_TAGS.EC_TAG_PASSWD_SALT) ||
+      saltResponse.tags[0]
+    if (!saltTag || saltTag.value.length < 8)
+      throw new Error('Authentication failed: missing password salt')
+    // aMule formats the salt as %lX (uppercase hex, no leading zeros) from a uint64.
+    const hexSalt = saltTag.value.readBigUInt64BE(0).toString(16).toUpperCase()
+    const hashedSalt = createHash('md5').update(hexSalt).digest('hex')
+    const hashedPass = createHash('md5').update(this.password).digest('hex')
+    return createHash('md5')
+      .update(hashedPass + hashedSalt)
+      .digest('hex')
+  }
+
+  /*
+   * Legacy (aMule < 3.0) login: MD5 salted password hash, no encryption.
+   * Continues from the AUTH_SALT reply already received.
+   */
+  async authenticateLegacy(saltResponse) {
+    const passwdHash = this.legacyPasswdHash(saltResponse)
+
+    const authReply = await this.sendPacket(EC_OPCODES.EC_OP_AUTH_PASSWD, [
+      this.createTag(
+        EC_TAGS.EC_TAG_PASSWD_HASH,
+        EC_TAG_TYPES.EC_TAGTYPE_HASH16,
+        passwdHash,
+      ),
+    ])
+    if (authReply.opcode !== EC_OPCODES.EC_OP_AUTH_OK) {
+      const reason = authReply.tags?.[0]?.humanValue || 'unknown reason'
+      throw new Error(
+        `Authentication failed (opcode: 0x${authReply.opcode.toString(16)}): ${reason}`,
+      )
+    }
+    if (DEBUG) console.log('Authentication successful (legacy MD5)')
   }
 }
 
